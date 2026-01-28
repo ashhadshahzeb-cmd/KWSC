@@ -1,13 +1,13 @@
 {
   "functions": {
-    "api/*.js": {
+    "api/index.cjs": {
       "runtime": "@vercel/node"
     }
   },
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "/api/index.js"
+      "destination": "/api/index.cjs"
     },
     {
       "source": "/(.*)",
