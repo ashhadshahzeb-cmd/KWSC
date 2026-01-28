@@ -293,6 +293,59 @@ app.get('/api/chat/users', async (req, res) => {
     }
 });
 // ============================================================================
+// ALL EMPLOYEES API (Admin Only)
+// ============================================================================
+
+// Get all employees from registration table
+app.get('/api/employees', async (req, res) => {
+    try {
+        const { search, limit = 100, offset = 0 } = req.query;
+
+        let query = 'SELECT * FROM registration';
+        let params = [];
+
+        if (search) {
+            query += ' WHERE emp_name ILIKE $1 OR emp_no::TEXT ILIKE $1 OR nic ILIKE $1';
+            params.push(`%${search}%`);
+        }
+
+        query += ` ORDER BY emp_no ASC LIMIT ${parseInt(limit)} OFFSET ${parseInt(offset)}`;
+
+        const result = await pool.query(query, params);
+
+        // Get total count
+        let countQuery = 'SELECT COUNT(*) FROM registration';
+        if (search) {
+            countQuery += ' WHERE emp_name ILIKE $1 OR emp_no::TEXT ILIKE $1 OR nic ILIKE $1';
+        }
+        const countResult = await pool.query(countQuery, params.length > 0 ? [params[0]] : []);
+
+        res.json({
+            employees: result.rows,
+            total: parseInt(countResult.rows[0].count),
+            limit: parseInt(limit),
+            offset: parseInt(offset)
+        });
+    } catch (err) {
+        console.error('[EMPLOYEES_API_ERROR]', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Get single employee by ID
+app.get('/api/employees/:empNo', async (req, res) => {
+    try {
+        const result = await pool.query('SELECT * FROM registration WHERE emp_no = $1', [req.params.empNo]);
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Employee not found' });
+        }
+        res.json(result.rows[0]);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ============================================================================
 // CLAIMS REIMBURSEMENT API
 // ============================================================================
 
@@ -832,6 +885,47 @@ app.get('/api/users', async (req, res) => {
             ORDER BY u.id DESC
         `);
         res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Admin-only Create User (Bypasses OTP)
+app.post('/api/users', async (req, res) => {
+    const { email, password, full_name, role, emp_no, phone } = req.body;
+
+    if (!email || !password) {
+        return res.status(400).json({ error: 'Email and password are required' });
+    }
+
+    try {
+        // Check if user already exists
+        const checkUser = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
+        if (checkUser.rows.length > 0) {
+            return res.status(400).json({ error: 'A user with this email already exists' });
+        }
+
+        const result = await pool.query(
+            'INSERT INTO users (email, password, full_name, role, emp_no, phone) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+            [email, password, full_name, role || 'user', emp_no, phone]
+        );
+
+        // Notify admins
+        await pool.query(
+            'INSERT INTO notifications (type, title, message, status) VALUES ($1, $2, $3, $4)',
+            ['new_user', 'User Created (Admin)', `Admin created new account for ${full_name || email}.`, 'unread']
+        );
+
+        res.status(201).json({
+            success: true,
+            user: {
+                id: result.rows[0].id,
+                email: result.rows[0].email,
+                name: result.rows[0].full_name,
+                role: result.rows[0].role,
+                empNo: result.rows[0].emp_no
+            }
+        });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

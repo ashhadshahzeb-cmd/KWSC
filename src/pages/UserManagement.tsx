@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { Users, Shield, Check, X, Search, UserPlus, CreditCard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,6 +21,7 @@ interface UserWithRole {
   full_name: string;
   role: string;
   permissions: string[];
+  has_medical_card?: boolean;
 }
 
 interface Permission {
@@ -39,6 +41,15 @@ const UserManagement = () => {
   const [showPermissionDialog, setShowPermissionDialog] = useState(false);
   const [userPermissions, setUserPermissions] = useState<string[]>([]);
   const [showCardDialog, setShowCardDialog] = useState(false);
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [newUserData, setNewUserData] = useState({
+    email: "",
+    password: "",
+    full_name: "",
+    role: "user",
+    emp_no: "",
+    phone: ""
+  });
 
   useEffect(() => {
     fetchUsers();
@@ -146,6 +157,106 @@ const UserManagement = () => {
           <h1 className="text-2xl font-display font-bold text-foreground">User Management</h1>
           <p className="text-muted-foreground">Manage users, roles, and permissions (SQL Backend)</p>
         </div>
+        <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+          <DialogTrigger asChild>
+            <Button className="gap-2 bg-primary hover:bg-primary/90">
+              <UserPlus className="w-4 h-4" />
+              Create User
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="font-display">Create New User Account</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              try {
+                await sqlApi.users.create(newUserData);
+                toast({
+                  title: "User Created",
+                  description: `Account for ${newUserData.full_name} has been created successfully.`,
+                });
+                setShowCreateDialog(false);
+                setNewUserData({ email: "", password: "", full_name: "", role: "user", emp_no: "", phone: "" });
+                fetchUsers();
+              } catch (error: any) {
+                toast({
+                  title: "Error",
+                  description: error.message || "Failed to create user",
+                  variant: "destructive",
+                });
+              }
+            }} className="space-y-4 pt-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Full Name *</Label>
+                  <Input
+                    value={newUserData.full_name}
+                    onChange={(e) => setNewUserData({ ...newUserData, full_name: e.target.value })}
+                    placeholder="John Doe"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Role</Label>
+                  <Select value={newUserData.role} onValueChange={(v) => setNewUserData({ ...newUserData, role: v })}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="user">User</SelectItem>
+                      <SelectItem value="admin">Admin</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Email Address *</Label>
+                <Input
+                  type="email"
+                  value={newUserData.email}
+                  onChange={(e) => setNewUserData({ ...newUserData, email: e.target.value })}
+                  placeholder="john@example.com"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Password *</Label>
+                <Input
+                  type="password"
+                  value={newUserData.password}
+                  onChange={(e) => setNewUserData({ ...newUserData, password: e.target.value })}
+                  placeholder="Minimum 6 characters"
+                  required
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Employee No</Label>
+                  <Input
+                    value={newUserData.emp_no}
+                    onChange={(e) => setNewUserData({ ...newUserData, emp_no: e.target.value })}
+                    placeholder="EMP001"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Phone Number</Label>
+                  <Input
+                    value={newUserData.phone}
+                    onChange={(e) => setNewUserData({ ...newUserData, phone: e.target.value })}
+                    placeholder="+92..."
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end gap-3 pt-4">
+                <Button type="button" variant="outline" onClick={() => setShowCreateDialog(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit">Create Account</Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">

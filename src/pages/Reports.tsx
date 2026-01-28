@@ -7,9 +7,12 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
+import { FieldCustomizer } from "@/components/admin/FieldCustomizer";
+import { useAuth } from "@/contexts/AuthContext";
 
 const Reports = () => {
   const { toast } = useToast();
+  const { isAdmin } = useAuth();
   const [dateRange, setDateRange] = useState({ start: "", end: "" });
   const [employeeNo, setEmployeeNo] = useState("");
 
@@ -23,9 +26,12 @@ const Reports = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-display font-bold text-foreground">Reports</h1>
-        <p className="text-muted-foreground">Generate and download various reports</p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-display font-bold text-foreground">Reports</h1>
+          <p className="text-muted-foreground">Generate and download various reports</p>
+        </div>
+        {isAdmin && <FieldCustomizer moduleName="Reports" />}
       </div>
 
       {/* Report Types */}

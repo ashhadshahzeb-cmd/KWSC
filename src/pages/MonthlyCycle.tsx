@@ -9,6 +9,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { FieldCustomizer } from "@/components/admin/FieldCustomizer";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface MonthlyCycleRecord {
   id: string;
@@ -33,6 +35,7 @@ const initialRecords: MonthlyCycleRecord[] = [
 
 const MonthlyCycle = () => {
   const { toast } = useToast();
+  const { isAdmin } = useAuth();
   const [records, setRecords] = useState<MonthlyCycleRecord[]>(initialRecords);
   const [searchTerm, setSearchTerm] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -50,12 +53,12 @@ const MonthlyCycle = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     // Check for duplicate entry
     const exists = records.some(
       (r) => r.empNo === formData.empNo && r.allowMonth === formData.allowMonth && r.cycleNo === parseInt(formData.cycleNo)
     );
-    
+
     if (exists) {
       toast({
         title: "Duplicate Entry",
@@ -100,62 +103,65 @@ const MonthlyCycle = () => {
           <h1 className="text-2xl font-display font-bold text-foreground">Monthly Cycle (Note Sheet)</h1>
           <p className="text-muted-foreground">Track employee monthly cycles and allowances</p>
         </div>
-        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-          <DialogTrigger asChild>
-            <Button className="gap-2">
-              <Plus className="w-4 h-4" />
-              Add Cycle
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle className="font-display">New Monthly Cycle</DialogTitle>
-            </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label>Employee No *</Label>
-                <Input
-                  value={formData.empNo}
-                  onChange={(e) => setFormData({ ...formData, empNo: e.target.value })}
-                  placeholder="Enter Employee No"
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Allow Month *</Label>
-                <Select value={formData.allowMonth} onValueChange={(value) => setFormData({ ...formData, allowMonth: value })}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select month" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {months.map((month) => (
-                      <SelectItem key={month} value={month}>{month}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Cycle No *</Label>
-                <Select value={formData.cycleNo} onValueChange={(value) => setFormData({ ...formData, cycleNo: value })}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select cycle" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {[1, 2, 3, 4, 5, 6].map((num) => (
-                      <SelectItem key={num} value={num.toString()}>Cycle {num}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex justify-end gap-3 pt-4">
-                <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>
-                  Cancel
-                </Button>
-                <Button type="submit">Save Record</Button>
-              </div>
-            </form>
-          </DialogContent>
-        </Dialog>
+        <div className="flex items-center gap-3">
+          {isAdmin && <FieldCustomizer moduleName="MonthlyCycle" />}
+          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+            <DialogTrigger asChild>
+              <Button className="gap-2">
+                <Plus className="w-4 h-4" />
+                Add Cycle
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle className="font-display">New Monthly Cycle</DialogTitle>
+              </DialogHeader>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Employee No *</Label>
+                  <Input
+                    value={formData.empNo}
+                    onChange={(e) => setFormData({ ...formData, empNo: e.target.value })}
+                    placeholder="Enter Employee No"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Allow Month *</Label>
+                  <Select value={formData.allowMonth} onValueChange={(value) => setFormData({ ...formData, allowMonth: value })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select month" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {months.map((month) => (
+                        <SelectItem key={month} value={month}>{month}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Cycle No *</Label>
+                  <Select value={formData.cycleNo} onValueChange={(value) => setFormData({ ...formData, cycleNo: value })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select cycle" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[1, 2, 3, 4, 5, 6].map((num) => (
+                        <SelectItem key={num} value={num.toString()}>Cycle {num}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex justify-end gap-3 pt-4">
+                  <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button type="submit">Save Record</Button>
+                </div>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       {/* Search */}

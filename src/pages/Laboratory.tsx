@@ -11,6 +11,7 @@ import { useTreatment } from "@/contexts/TreatmentContext";
 import { sqlApi, type TreatmentRecord } from "@/lib/api";
 import { PDFDownloadLink } from "@react-pdf/renderer";
 import TreatmentSlip from "@/components/reports/TreatmentSlip";
+import { FieldCustomizer } from "@/components/admin/FieldCustomizer";
 
 const Laboratory = () => {
   const { toast } = useToast();
@@ -139,6 +140,7 @@ const Laboratory = () => {
           <h1 className="text-2xl font-display font-bold text-foreground">Laboratory Tests</h1>
           <p className="text-muted-foreground">Track laboratory tests and diagnostics using Treatment2 table</p>
         </div>
+        <FieldCustomizer moduleName="Laboratory" />
       </div>
 
       <Card className="p-6">

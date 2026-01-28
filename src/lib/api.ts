@@ -270,6 +270,20 @@ export const usersApi = {
         return apiCall('/users');
     },
 
+    create: async (userData: {
+        email: string;
+        password?: string;
+        full_name: string;
+        role: string;
+        emp_no?: string;
+        phone?: string;
+    }) => {
+        return apiCall('/users', {
+            method: 'POST',
+            body: JSON.stringify(userData),
+        });
+    },
+
     updateRole: async (id: number | string, role: string) => {
         return apiCall(`/users/${id}/role`, {
             method: 'PATCH',

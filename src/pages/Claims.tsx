@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Receipt, CheckCircle, XCircle, Upload, Loader2, ExternalLink } from 'lucide-react';
 import { apiCall } from '@/lib/api';
 import { toast } from 'sonner';
+import { FieldCustomizer } from "@/components/admin/FieldCustomizer";
 
 const Claims = () => {
     const { user, isAdmin } = useAuth();
@@ -92,7 +93,10 @@ const Claims = () => {
 
     return (
         <div className="space-y-6">
-            <h2 className="text-3xl font-bold tracking-tight">Reimbursement Claims</h2>
+            <div className="flex items-center justify-between">
+                <h2 className="text-3xl font-bold tracking-tight">Reimbursement Claims</h2>
+                {isAdmin && <FieldCustomizer moduleName="Claims" />}
+            </div>
 
             {isAdmin ? (
                 <Card className="glass-card">

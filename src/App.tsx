@@ -20,7 +20,7 @@ import UserManagement from "./pages/UserManagement";
 import AdminChat from "./pages/AdminChat";
 import Profile from "./pages/Profile";
 import Settings from "./pages/Settings";
-import SqlData from "./pages/SqlData";
+import AllEmployees from "./pages/AllEmployees";
 import EmployeeEntry from "./pages/EmployeeEntry";
 import NoteSheet from "./pages/NoteSheet";
 import NotFound from "./pages/NotFound";
@@ -116,7 +116,7 @@ const AppRoutes = () => {
         <Route path="profile" element={<Profile />} />
         <Route path="medical-card" element={<VirtualCard />} />
         <Route path="settings" element={<Settings />} />
-        <Route path="sql-data" element={<SqlData />} />
+        <Route path="all-employees" element={<AllEmployees />} />
         <Route
           path="employee-entry"
           element={

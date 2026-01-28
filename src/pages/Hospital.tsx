@@ -13,6 +13,7 @@ import { useTreatment } from "@/contexts/TreatmentContext";
 import { sqlApi, type TreatmentRecord } from "@/lib/api";
 import { PDFDownloadLink } from "@react-pdf/renderer";
 import TreatmentSlip from "@/components/reports/TreatmentSlip";
+import { FieldCustomizer } from "@/components/admin/FieldCustomizer";
 
 const Hospital = () => {
   const { toast } = useToast();
@@ -114,6 +115,7 @@ const Hospital = () => {
           <FlaskConical className="mr-3" /> HOSPITAL & LABORATORY SYSTEM
         </h1>
         <div className="flex gap-2">
+          <FieldCustomizer moduleName="Hospital" />
           <Button onClick={clearSession} variant="outline" className="bg-white text-sky-700 hover:bg-sky-50 border-none font-bold">
             <RotateCcw className="mr-2 h-4 w-4" /> RESET
           </Button>
