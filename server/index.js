@@ -12,6 +12,9 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 const MASTER_KEY = process.env.MASTER_KEY || '8271933';
 
+// Export for Vercel
+module.exports = app;
+
 // Middleware
 app.use(cors());
 app.use(express.json());
@@ -1028,8 +1031,13 @@ const initSchema = async () => {
 };
 
 // Start Server
-app.listen(PORT, async () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-    console.log('Database: PostgreSQL via Supabase');
-    await initSchema();
-});
+if (require.main === module) {
+    app.listen(PORT, async () => {
+        console.log(`Server running on http://localhost:${PORT}`);
+        console.log('Database: PostgreSQL via Supabase');
+        await initSchema();
+    });
+} else {
+    // When required as a module (e.g. by Vercel), still initialize schema
+    initSchema().catch(err => console.error('Delayed Schema Init Error:', err));
+}
