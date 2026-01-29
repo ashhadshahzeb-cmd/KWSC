@@ -30,6 +30,11 @@ app.get('/', (req, res) => {
     res.json({ message: 'HealFlow API is running', env: process.env.NODE_ENV });
 });
 
+// Standalone ping for quick verification
+app.get('/api/ping', (req, res) => {
+    res.json({ pong: true, time: new Date().toISOString() });
+});
+
 // Health Check
 app.get('/api/health', async (req, res) => {
     try {
@@ -321,94 +326,13 @@ app.get('/api/tables', async (req, res) => {
     }
 });
 
-// Create Treatment2 Table
-app.post('/api/setup/legacy-schema', async (req, res) => {
+// Manual Database Initialization (Call this once after deployment)
+app.post('/api/setup/init-db', async (req, res) => {
     try {
-        const createTableQuery = `
-            CREATE TABLE IF NOT EXISTS Treatment2 (
-                Serial_no SERIAL PRIMARY KEY,
-                Emp_no TEXT,
-                Emp_name TEXT,
-                Book_no TEXT,
-                Patient_nic TEXT,
-                Patient_name TEXT,
-                Patient TEXT,
-                Refrence TEXT,
-                Treatment TEXT,
-                Visit_Date TIMESTAMP,
-                Qr_code TEXT,
-                Store TEXT,
-                Allow_month TEXT,
-                Cycle_no TEXT,
-                Lab_name TEXT,
-                Hospital_name TEXT,
-                Opd_Ipd TEXT,
-                Medicine1 TEXT, Price1 DECIMAL(18,2),
-                Medicine2 TEXT, Price2 DECIMAL(18,2),
-                Medicine3 TEXT, Price3 DECIMAL(18,2),
-                Medicine4 TEXT, Price4 DECIMAL(18,2),
-                Medicine5 TEXT, Price5 DECIMAL(18,2),
-                Medicine6 TEXT, Price6 DECIMAL(18,2),
-                Medicine7 TEXT, Price7 DECIMAL(18,2),
-                Medicine8 TEXT, Price8 DECIMAL(18,2),
-                Medicine9 TEXT, Price9 DECIMAL(18,2),
-                Medicine10 TEXT, Price10 DECIMAL(18,2),
-                Medicine_amount DECIMAL(18,2),
-                Patient_type TEXT,
-                Vendor TEXT,
-                Invoice_no TEXT,
-                Description TEXT
-            );
-
-            CREATE TABLE IF NOT EXISTS users (
-                id SERIAL PRIMARY KEY,
-                email TEXT UNIQUE NOT NULL,
-                password TEXT NOT NULL,
-                full_name TEXT,
-                role TEXT DEFAULT 'user',
-                permissions JSONB DEFAULT '[]',
-                emp_no TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-
-            CREATE TABLE IF NOT EXISTS registration (
-                id SERIAL PRIMARY KEY,
-                emp_no TEXT UNIQUE,
-                emp_name TEXT,
-                book_no TEXT,
-                patient_nic TEXT,
-                phone TEXT,
-                patient_type TEXT,
-                rfid_tag TEXT,
-                custom_fields JSONB,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-        `;
-        await pool.query(createTableQuery);
-
-        // Migrate existing tables if they lack new columns
-        const addColumnsQuery = `
-            DO $$ 
-            BEGIN 
-                -- treatment2 additions
-                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='treatment2' AND column_name='book_no') THEN
-                    ALTER TABLE treatment2 ADD COLUMN book_no TEXT;
-                END IF;
-                -- registration additions
-                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='registration' AND column_name='emp_no') THEN
-                    ALTER TABLE registration ADD COLUMN emp_no TEXT;
-                END IF;
-                -- notifications additions
-                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='notifications' AND column_name='metadata') THEN
-                    ALTER TABLE notifications ADD COLUMN metadata JSONB DEFAULT '{}';
-                END IF;
-            END $$;
-        `;
-        await pool.query(addColumnsQuery);
-
-        res.json({ message: 'Database schema verified and updated.' });
+        await initSchema();
+        res.json({ success: true, message: 'Database schema initialized successfully' });
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: 'Schema Init Failed', message: err.message });
     }
 });
 
@@ -1054,19 +978,11 @@ if (require.main === module) {
     });
 } else {
     // For Vercel, don't block the startup with schema init
-    // Just ensure it runs once
     console.log('Server loaded as module (Vercel mode)');
     if (!process.env.DATABASE_URL) {
         console.warn('⚠️  DATABASE_URL is missing!');
     }
 
-    // Lazy init schema
-    let schemaInitialized = false;
-    app.use(async (req, res, next) => {
-        if (!schemaInitialized && req.url.startsWith('/api')) {
-            schemaInitialized = true;
-            initSchema().catch(e => console.error('Delayed Schema Init Error:', e));
-        }
-        next();
-    });
+    // Automatic schema init is disabled for Vercel to prevent timeouts.
+    // Use POST /api/setup/init-db to initialize manually.
 }
