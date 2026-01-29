@@ -25,6 +25,11 @@ app.use((req, res, next) => {
     next();
 });
 
+// Root route for status check
+app.get('/', (req, res) => {
+    res.json({ message: 'HealFlow API is running', env: process.env.NODE_ENV });
+});
+
 // Health Check
 app.get('/api/health', async (req, res) => {
     try {
@@ -1030,6 +1035,16 @@ const initSchema = async () => {
     }
 };
 
+// Global Error Handler
+app.use((err, req, res, next) => {
+    console.error('Unhandled System Error:', err);
+    res.status(500).json({
+        error: 'Internal Server Error',
+        message: err.message,
+        path: req.url
+    });
+});
+
 // Start Server
 if (require.main === module) {
     app.listen(PORT, async () => {
@@ -1038,6 +1053,20 @@ if (require.main === module) {
         await initSchema();
     });
 } else {
-    // When required as a module (e.g. by Vercel), still initialize schema
-    initSchema().catch(err => console.error('Delayed Schema Init Error:', err));
+    // For Vercel, don't block the startup with schema init
+    // Just ensure it runs once
+    console.log('Server loaded as module (Vercel mode)');
+    if (!process.env.DATABASE_URL) {
+        console.warn('⚠️  DATABASE_URL is missing!');
+    }
+
+    // Lazy init schema
+    let schemaInitialized = false;
+    app.use(async (req, res, next) => {
+        if (!schemaInitialized && req.url.startsWith('/api')) {
+            schemaInitialized = true;
+            initSchema().catch(e => console.error('Delayed Schema Init Error:', e));
+        }
+        next();
+    });
 }
