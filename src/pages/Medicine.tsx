@@ -136,6 +136,34 @@ const Medicine = () => {
     setDate(new Date().toISOString().split('T')[0]);
   };
 
+  // Voice Data Entry Listener
+  useEffect(() => {
+    const handleVoiceEntry = (e: any) => {
+      const { field, value } = e.detail;
+
+      if (field.startsWith('medicine')) {
+        const index = parseInt(field.replace('medicine', '')) - 1;
+        updateItem(index, value, items[index]?.price || 0);
+      }
+      else if (field.startsWith('quantity')) {
+        const index = parseInt(field.replace('quantity', '')) - 1;
+        updateItem(index, items[index]?.name || "", parseFloat(value) || 0);
+      }
+      else if (field === 'empNo') {
+        setEmpNo(value);
+      }
+      else if (field === 'invoiceNo') {
+        setInvoiceNo(value);
+      }
+      else if (field === 'amount') {
+        setMedicineAmount(parseFloat(value) || 0);
+      }
+    };
+
+    window.addEventListener('voice-data-entry', handleVoiceEntry);
+    return () => window.removeEventListener('voice-data-entry', handleVoiceEntry);
+  }, [items, updateItem, setInvoiceNo, setMedicineAmount]);
+
   return (
     <div className="space-y-6 max-w-[1400px] mx-auto p-4">
       <div className="flex items-center justify-between border-b pb-4 bg-sky-600 p-4 rounded-t-lg">
@@ -160,7 +188,7 @@ const Medicine = () => {
                 <MedicineSuggestionInput
                   value={items[i]?.name || ""}
                   onChange={(name, price) => updateItem(i, name, price || items[i]?.price || 0)}
-                  className="h-8 border-sky-200 dark:border-sky-800 focus:border-sky-500"
+                  className="h-8 border-sky-200 dark:border-sky-800 focus:border-sky-500 bg-background"
                 />
               </div>
             ))}
@@ -250,7 +278,7 @@ const Medicine = () => {
                   type="date"
                   value={date}
                   onChange={(e) => setDate(e.target.value)}
-                  className="h-9 border-sky-200"
+                  className="h-9 border-sky-200 bg-background"
                 />
               </div>
             </div>
@@ -317,7 +345,7 @@ const Medicine = () => {
           </h2>
           <div className="relative w-72">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-sky-400" />
-            <Input placeholder="Filter records..." className="pl-10 border-sky-100 bg-white" />
+            <Input placeholder="Filter records..." className="pl-10 border-sky-100 bg-background" />
           </div>
         </div>
 

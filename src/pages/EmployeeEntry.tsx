@@ -252,7 +252,7 @@ const EmployeeEntry = () => {
 
                         <div className="space-y-2">
                             <Label className="text-sky-900 font-semibold">Employee Name</Label>
-                            <Input value={employee?.name || empName} readOnly className="border-sky-200 bg-slate-50 font-medium" />
+                            <Input value={employee?.name || empName} readOnly className="border-sky-200 bg-background font-medium" />
                         </div>
 
                         <div className="space-y-2">

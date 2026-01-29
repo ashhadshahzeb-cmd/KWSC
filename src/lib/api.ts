@@ -6,6 +6,7 @@ const API_BASE = import.meta.env.PROD
 
 // Helper function for API calls
 export async function apiCall(endpoint: string, options: RequestInit = {}) {
+    console.log(`[API CALL] Requesting: ${API_BASE}${endpoint}`, options);
     const response = await fetch(`${API_BASE}${endpoint}`, {
         headers: {
             'Content-Type': 'application/json',

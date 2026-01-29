@@ -75,6 +75,36 @@ const Hospital = () => {
     setLoading(false);
   };
 
+  // Voice Data Entry Listener
+  useEffect(() => {
+    const handleVoiceEntry = (e: any) => {
+      const { field, value } = e.detail;
+
+      // Map 'medicine' voice command to 'test' for hospital page
+      if (field.startsWith('medicine')) {
+        const index = parseInt(field.replace('medicine', '')) - 1;
+        if (index >= 0 && index < labLabels.length) {
+          updateItem(index, value, items[index]?.price || 0);
+        }
+      }
+      else if (field.startsWith('quantity')) {
+        const index = parseInt(field.replace('quantity', '')) - 1;
+        if (index >= 0 && index < labLabels.length) {
+          updateItem(index, items[index]?.name || "", parseFloat(value) || 0);
+        }
+      }
+      else if (field === 'empNo') {
+        setEmpNo(value);
+      }
+      else if (field === 'invoiceNo') {
+        setInvoiceNo(value);
+      }
+    };
+
+    window.addEventListener('voice-data-entry', handleVoiceEntry);
+    return () => window.removeEventListener('voice-data-entry', handleVoiceEntry);
+  }, [items, updateItem, setInvoiceNo]);
+
   const handleSave = async () => {
     setLoading(true);
     try {
@@ -202,12 +232,12 @@ const Hospital = () => {
 
               <div className="flex items-center gap-4">
                 <Label className="w-32 text-right font-bold text-sky-900">Amount</Label>
-                <Input className="h-8 border-sky-200 bg-white" placeholder="0.00" />
+                <Input className="h-8 border-sky-200 bg-background" placeholder="0.00" />
               </div>
 
               <div className="flex items-center gap-4">
                 <Label className="w-32 text-right font-bold text-sky-900">Date</Label>
-                <Input type="date" className="h-8 border-sky-200 bg-white" defaultValue={new Date().toISOString().split('T')[0]} />
+                <Input type="date" className="h-8 border-sky-200 bg-background" defaultValue={new Date().toISOString().split('T')[0]} />
               </div>
 
               <div className="space-y-1">
@@ -241,7 +271,7 @@ const Hospital = () => {
                   type="number"
                   value={items[i]?.price || 0}
                   onChange={(e) => updateItem(i, items[i]?.name || "", parseFloat(e.target.value) || 0)}
-                  className="h-8 w-28 border-teal-200 bg-white"
+                  className="h-8 w-28 border-teal-200 bg-background"
                 />
               </div>
             ))}
@@ -285,7 +315,7 @@ const Hospital = () => {
           </h2>
           <div className="relative w-72">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-teal-400" />
-            <Input placeholder="Filter records..." className="pl-10 border-teal-100 bg-white shadow-sm" />
+            <Input placeholder="Filter records..." className="pl-10 border-teal-100 bg-background shadow-sm" />
           </div>
         </div>
 

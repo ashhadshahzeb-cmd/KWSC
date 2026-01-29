@@ -39,9 +39,12 @@ const Dashboard = () => {
 
   const fetchDashboardData = async () => {
     try {
+      console.log("[DASHBOARD] Fetching data... User:", user, "isAdmin:", isAdmin);
       setLoading(true);
       if (isAdmin) {
+        console.log("[DASHBOARD] Calling sqlApi.dashboard.getStats()...");
         const stats = await sqlApi.dashboard.getStats();
+        console.log("[DASHBOARD] Stats received:", stats);
         setDashboardData({
           mainStats: [
             { title: "Total Patients", value: stats.patients, change: "+12%", icon: Users, color: "primary", description: "Registered in system" },

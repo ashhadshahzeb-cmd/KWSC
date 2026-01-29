@@ -215,8 +215,8 @@ const NoteSheet = () => {
                             {/* Policy Alert */}
                             {policyAlert && (
                                 <div className={`p-3 rounded-lg border text-sm ${policyAlert.isExceeded
-                                        ? 'bg-red-50 border-red-200 text-red-800'
-                                        : 'bg-green-50 border-green-200 text-green-800'
+                                    ? 'bg-red-50 border-red-200 text-red-800'
+                                    : 'bg-green-50 border-green-200 text-green-800'
                                     }`}>
                                     <div className="flex justify-between items-center mb-1">
                                         <span className="font-bold uppercase text-xs">{policyAlert.rank} Limit</span>
@@ -267,7 +267,7 @@ const NoteSheet = () => {
                                 <div className="space-y-2">
                                     <Label className="text-sky-900 font-semibold text-xs uppercase">Selected Store</Label>
                                     <Select value={store} onValueChange={setStore}>
-                                        <SelectTrigger className="border-sky-200 bg-slate-50">
+                                        <SelectTrigger className="border-sky-200 bg-background">
                                             <SelectValue placeholder="Select Store" />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -279,12 +279,12 @@ const NoteSheet = () => {
                                 </div>
 
                                 <div className="space-y-2">
-                                    <Label className="text-sky-900 font-semibold text-xs uppercase">Total Amount</Label>
+                                    <Label className="text-sky-900 font-semibold text-xs uppercase" > Total Amount </Label>
                                     <Input
                                         type="number"
                                         value={medicineAmount || ""}
                                         onChange={(e) => setMedicineAmount(parseFloat(e.target.value) || 0)}
-                                        className="border-sky-200 dark:border-sky-800 text-lg font-bold text-sky-700 dark:text-sky-400 bg-sky-50/50 dark:bg-sky-900/20"
+                                        className="border-sky-200 dark:border-sky-800 text-lg font-bold text-sky-700 dark:text-sky-400 bg-background"
                                         placeholder="0.00"
                                     />
                                 </div>

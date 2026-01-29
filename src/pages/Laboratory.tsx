@@ -81,6 +81,31 @@ const Laboratory = () => {
     }
   };
 
+  // Voice Data Entry Listener
+  useEffect(() => {
+    const handleVoiceEntry = (e: any) => {
+      const { field, value } = e.detail;
+
+      if (field.startsWith('medicine')) {
+        const index = parseInt(field.replace('medicine', '')) - 1;
+        updateItem(index, value, items[index]?.price || 0);
+      }
+      else if (field.startsWith('quantity')) {
+        const index = parseInt(field.replace('quantity', '')) - 1;
+        updateItem(index, items[index]?.name || "", parseFloat(value) || 0);
+      }
+      else if (field === 'empNo') {
+        setEmpNo(value);
+      }
+      else if (field === 'empName' || (field === 'name' && currentStep === 'employee')) {
+        setEmpName(value);
+      }
+    };
+
+    window.addEventListener('voice-data-entry', handleVoiceEntry);
+    return () => window.removeEventListener('voice-data-entry', handleVoiceEntry);
+  }, [items, updateItem, currentStep]);
+
   const handleItemsSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -318,7 +343,7 @@ const Laboratory = () => {
               placeholder="Search by Employee, Lab Name..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
+              className="pl-10 bg-background"
             />
           </div>
         </div>

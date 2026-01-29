@@ -1,23 +1,12 @@
 // HealFlow Backend Server - SQL Server Version
 const express = require('express');
-const nodemailer = require('nodemailer');
 const cors = require('cors');
 const { v4: uuidv4 } = require('uuid');
 const QRCode = require('qrcode');
 const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '.env') });
 
-const { pool } = require('./db.js');
-
-
-// Email Transporter (For OTP)
-const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-        user: process.env.EMAIL_USER || '', // e.g. your-email@gmail.com
-        pass: process.env.EMAIL_PASS || ''  // e.g. your-app-password
-    }
-});
+const { pool } = require('./db');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -26,6 +15,12 @@ const MASTER_KEY = process.env.MASTER_KEY || '8271933';
 // Middleware
 app.use(cors());
 app.use(express.json());
+
+// Request Logging Middleware
+app.use((req, res, next) => {
+    console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+    next();
+});
 
 // Health Check
 app.get('/api/health', async (req, res) => {
@@ -81,38 +76,8 @@ app.delete('/api/notifications', async (req, res) => {
 
 app.get('/api/users/:id/card', async (req, res) => {
     try {
-        console.log(`[MEDICAL_CARD] Fetching card for user ID: ${req.params.id}`);
-
-        // Ensure ID is valid integer
-        const userId = parseInt(req.params.id);
-        if (isNaN(userId)) {
-            console.log('[MEDICAL_CARD] Invalid User ID');
-            return res.status(400).json({ error: 'Invalid User ID' });
-        }
-
-        const result = await pool.query('SELECT * FROM medical_cards WHERE user_id = $1', [userId]);
-        console.log(`[MEDICAL_CARD] Found ${result.rows.length} cards`);
-
-        if (result.rows.length === 0) return res.json(null);
-
-        const card = result.rows[0];
-
-        // Calculate spent amount from treatment2 using emp_no
-        const spentRes = await pool.query(
-            'SELECT SUM(medicine_amount) as total_spent FROM treatment2 WHERE emp_no = $1',
-            [card.emp_no]
-        );
-
-        const spentAmount = parseFloat(spentRes.rows[0].total_spent || 0);
-        const totalLimit = parseFloat(card.total_limit || 100000.00);
-        const remainingBalance = totalLimit - spentAmount;
-
-        res.json({
-            ...card,
-            total_limit: totalLimit,
-            spent_amount: spentAmount,
-            remaining_balance: remainingBalance
-        });
+        const result = await pool.query('SELECT * FROM medical_cards WHERE user_id = $1', [req.params.id]);
+        res.json(result.rows[0] || null);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -137,8 +102,8 @@ app.post('/api/users/:id/card', async (req, res) => {
         const query = `
             INSERT INTO medical_cards (
                 user_id, card_no, participant_name, emp_no, cnic, customer_no, dob, valid_upto, branch,
-                benefit_covered, hospitalization, room_limit, normal_delivery, c_section_limit, total_limit
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+                benefit_covered, hospitalization, room_limit, normal_delivery, c_section_limit
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
             ON CONFLICT (user_id) DO UPDATE SET
                 card_no = EXCLUDED.card_no,
                 participant_name = EXCLUDED.participant_name,
@@ -152,8 +117,7 @@ app.post('/api/users/:id/card', async (req, res) => {
                 hospitalization = EXCLUDED.hospitalization,
                 room_limit = EXCLUDED.room_limit,
                 normal_delivery = EXCLUDED.normal_delivery,
-                c_section_limit = EXCLUDED.c_section_limit,
-                total_limit = EXCLUDED.total_limit
+                c_section_limit = EXCLUDED.c_section_limit
             RETURNING *
         `;
 
@@ -171,8 +135,7 @@ app.post('/api/users/:id/card', async (req, res) => {
             hospitalization || null,
             room_limit || null,
             normal_delivery || null,
-            c_section_limit || null,
-            req.body.total_limit || 100000.00
+            c_section_limit || null
         ];
 
         const result = await pool.query(query, params);
@@ -187,7 +150,57 @@ app.post('/api/users/:id/card', async (req, res) => {
 app.delete('/api/users/:id/card', async (req, res) => {
     try {
         await pool.query('DELETE FROM medical_cards WHERE user_id = $1', [req.params.id]);
-        res.json({ success: true, message: 'Medical card deleted' });
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Chat Endpoints
+app.get('/api/chat/users', async (req, res) => {
+    try {
+        const query = `
+            SELECT DISTINCT u.id, u.full_name, u.email
+            FROM users u
+            JOIN chat_messages m ON (u.id = m.sender_id OR u.id = m.receiver_id)
+            WHERE u.role != 'admin'
+            ORDER BY u.id
+        `;
+        const result = await pool.query(query);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.get('/api/chat/history/:userId', async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const query = `
+            SELECT * FROM chat_messages
+            WHERE (sender_id = $1 AND receiver_id IS NULL)
+               OR (sender_id IS NULL AND receiver_id = $1)
+               OR (sender_id = $1 AND receiver_id IN (SELECT id FROM users WHERE role = 'admin'))
+               OR (sender_id IN (SELECT id FROM users WHERE role = 'admin') AND receiver_id = $1)
+            ORDER BY created_at ASC
+        `;
+        const result = await pool.query(query, [userId]);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/chat/send', async (req, res) => {
+    const { senderId, receiverId, message, isAdminMessage } = req.body;
+    try {
+        const query = `
+            INSERT INTO chat_messages (sender_id, receiver_id, message, is_admin_message)
+            VALUES ($1, $2, $3, $4)
+            RETURNING *
+        `;
+        const result = await pool.query(query, [senderId, receiverId, message, isAdminMessage]);
+        res.json(result.rows[0]);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -199,328 +212,29 @@ app.delete('/api/users/:id/card', async (req, res) => {
 
 app.get('/api/dashboard/stats', async (req, res) => {
     try {
+        console.log('[DASHBOARD] Fetching stats...');
         const patientsCount = await pool.query('SELECT COUNT(*) FROM registration');
         const medicineCount = await pool.query('SELECT COUNT(*) FROM treatment2 WHERE treatment = $1 OR medicine_amount > 0', ['medicine']);
         const hospitalCount = await pool.query('SELECT COUNT(*) FROM treatment2 WHERE hospital_name IS NOT NULL AND hospital_name != $1', ['']);
         const labCount = await pool.query('SELECT COUNT(*) FROM treatment2 WHERE lab_name IS NOT NULL AND lab_name != $1', ['']);
 
-        // Fetch Storage Stats
-        const storageRes = await pool.query('SELECT pg_database_size(current_database()) as size_bytes');
-        const sizeBytes = parseInt(storageRes.rows[0].size_bytes);
-        const totalLimitBytes = 500 * 1024 * 1024; // 500MB for Neon Free Tier
-        const storagePercentage = (sizeBytes / totalLimitBytes) * 100;
+        console.log(`[DASHBOARD] Counts - Patients: ${patientsCount.rows[0].count}, Medicine: ${medicineCount.rows[0].count}`);
 
-        const storage = {
-            bytes: sizeBytes,
-            humanReadable: (sizeBytes / (1024 * 1024)).toFixed(2) + ' MB',
-            percentage: storagePercentage.toFixed(2),
-            isCritical: storagePercentage > 80
+        // Fetch global recent activities for admin
+        const recentActivities = await pool.query('SELECT * FROM treatment2 ORDER BY visit_date DESC LIMIT 10');
+
+        const responseData = {
+            patients: parseInt(patientsCount.rows[0].count),
+            medicine: parseInt(medicineCount.rows[0].count),
+            hospital: parseInt(hospitalCount.rows[0].count),
+            lab: parseInt(labCount.rows[0].count),
+            recentActivities: recentActivities.rows
         };
 
-        // Auto-Notification if Critical
-        if (storage.isCritical) {
-            // Check if alert already sent in last 24 hours
-            const lastAlert = await pool.query(
-                "SELECT id FROM notifications WHERE type = 'storage_warning' AND created_at > NOW() - INTERVAL '1 day'"
-            );
-            if (lastAlert.rows.length === 0) {
-                await pool.query(
-                    'INSERT INTO notifications (type, title, message, status) VALUES ($1, $2, $3, $4)',
-                    ['storage_warning', 'Database Storage Alert', `Database storage is ${storage.percentage}% full (${storage.humanReadable} used). Please clean up or upgrade.`, 'unread']
-                );
-            }
-        }
-
-        res.json({
-            patients: patientsCount.rows[0].count,
-            medicine: medicineCount.rows[0].count,
-            hospital: hospitalCount.rows[0].count,
-            lab: labCount.rows[0].count,
-            recentActivities: recentActivities.rows,
-            storage
-        });
+        console.log('[DASHBOARD] Sending response:', JSON.stringify(responseData).substring(0, 100) + '...');
+        res.json(responseData);
     } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-// ============================================================================
-// CHAT SYSTEM API
-// ============================================================================
-
-// Send a message
-app.post('/api/chat/send', async (req, res) => {
-    const { senderId, receiverId, message, isAdminMessage } = req.body;
-    try {
-        const result = await pool.query(
-            'INSERT INTO chat_messages (sender_id, receiver_id, message, is_admin_message) VALUES ($1, $2, $3, $4) RETURNING *',
-            [senderId, receiverId, message, isAdminMessage || false]
-        );
-        res.json({ success: true, message: result.rows[0] });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-// Get chat history for a user
-app.get('/api/chat/history/:userId', async (req, res) => {
-    const { userId } = req.params;
-    try {
-        const result = await pool.query(
-            `SELECT * FROM chat_messages 
-             WHERE sender_id = $1 OR receiver_id = $1 
-             ORDER BY created_at ASC`,
-            [userId] // Fetches all messages where user is either sender or receiver
-        );
-        res.json(result.rows);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-// Get list of users who have chatted (For Admin)
-app.get('/api/chat/users', async (req, res) => {
-    try {
-        const result = await pool.query(
-            `SELECT DISTINCT u.id, u.full_name, u.email, u.role
-             FROM chat_messages cm
-             JOIN users u ON u.id = cm.sender_id
-             WHERE cm.is_admin_message = FALSE`
-        );
-        res.json(result.rows);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-// ============================================================================
-// ALL EMPLOYEES API (Admin Only)
-// ============================================================================
-
-// Get all employees from registration table
-app.get('/api/employees', async (req, res) => {
-    try {
-        const { search, limit = 100, offset = 0 } = req.query;
-
-        let query = 'SELECT * FROM registration';
-        let params = [];
-
-        if (search) {
-            query += ' WHERE emp_name ILIKE $1 OR emp_no::TEXT ILIKE $1 OR nic ILIKE $1';
-            params.push(`%${search}%`);
-        }
-
-        query += ` ORDER BY emp_no ASC LIMIT ${parseInt(limit)} OFFSET ${parseInt(offset)}`;
-
-        const result = await pool.query(query, params);
-
-        // Get total count
-        let countQuery = 'SELECT COUNT(*) FROM registration';
-        if (search) {
-            countQuery += ' WHERE emp_name ILIKE $1 OR emp_no::TEXT ILIKE $1 OR nic ILIKE $1';
-        }
-        const countResult = await pool.query(countQuery, params.length > 0 ? [params[0]] : []);
-
-        res.json({
-            employees: result.rows,
-            total: parseInt(countResult.rows[0].count),
-            limit: parseInt(limit),
-            offset: parseInt(offset)
-        });
-    } catch (err) {
-        console.error('[EMPLOYEES_API_ERROR]', err);
-        res.status(500).json({ error: err.message });
-    }
-});
-
-// Get single employee by ID
-app.get('/api/employees/:empNo', async (req, res) => {
-    try {
-        const result = await pool.query('SELECT * FROM registration WHERE emp_no = $1', [req.params.empNo]);
-        if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'Employee not found' });
-        }
-        res.json(result.rows[0]);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-// ============================================================================
-// CLAIMS REIMBURSEMENT API
-// ============================================================================
-
-// Submit a new claim
-app.post('/api/claims/submit', async (req, res) => {
-    const { userId, empNo, amount, claimType, description, imageUrl } = req.body;
-    try {
-        const result = await pool.query(
-            `INSERT INTO claims (user_id, emp_no, amount, claim_type, description, image_url) 
-             VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-            [userId, empNo, amount, claimType, description, imageUrl]
-        );
-        res.json({ success: true, claim: result.rows[0] });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-// Get user's claims
-app.get('/api/claims/user/:userId', async (req, res) => {
-    try {
-        const result = await pool.query(
-            'SELECT * FROM claims WHERE user_id = $1 ORDER BY created_at DESC',
-            [req.params.userId]
-        );
-        res.json(result.rows);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-// Get all claims for admin
-app.get('/api/claims/admin', async (req, res) => {
-    try {
-        const result = await pool.query(
-            `SELECT c.*, u.full_name, u.email 
-             FROM claims c 
-             JOIN users u ON c.user_id = u.id 
-             ORDER BY c.created_at DESC`
-        );
-        res.json(result.rows);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-// Update claim status (Approve/Reject)
-app.put('/api/claims/:id/status', async (req, res) => {
-    const { status, adminComments } = req.body;
-    const { id } = req.params;
-
-    try {
-        // Update status
-        const claim = await pool.query(
-            'UPDATE claims SET status = $1, admin_comments = $2, updated_at = NOW() WHERE id = $3 RETURNING *',
-            [status, adminComments, id]
-        );
-
-        // If Approved, deduct from balance (add to treatment2)
-        if (status === 'Approved' && claim.rows.length > 0) {
-            const c = claim.rows[0];
-            await pool.query(
-                `INSERT INTO treatment2 (emp_no, medicine_amount, description, treatment)
-                 VALUES ($1, $2, $3, 'Reimbursement')`,
-                [c.emp_no, c.amount, `Reimbursement Claim ID: ${c.id}`]
-            );
-        }
-
-        res.json({ success: true, claim: claim.rows[0] });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-// ============================================================================
-// FAMILY MANAGEMENT API
-// ============================================================================
-
-// Add a family member with card details
-app.post('/api/family/add', async (req, res) => {
-    const { userId, name, relation, dob, gender, card_no, valid_upto, hospitalization, room_limit, total_limit, cnic } = req.body;
-    try {
-        const result = await pool.query(
-            `INSERT INTO family_members (user_id, name, relation, dob, gender, card_no, valid_upto, hospitalization, room_limit, total_limit, cnic) 
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
-            [userId, name, relation, dob || null, gender, card_no || null, valid_upto || null, hospitalization || null, room_limit || null, total_limit || 50000, cnic || null]
-        );
-        res.json({ success: true, member: result.rows[0] });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-// Get user's family members with card details
-app.get('/api/family/:userId', async (req, res) => {
-    try {
-        const result = await pool.query(
-            'SELECT * FROM family_members WHERE user_id = $1 ORDER BY relation',
-            [req.params.userId]
-        );
-        res.json(result.rows);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-// Update individual family member card
-app.put('/api/family/:memberId', async (req, res) => {
-    const { memberId } = req.params;
-    const { name, relation, dob, gender, card_no, valid_upto, hospitalization, room_limit, total_limit, cnic } = req.body;
-    try {
-        const result = await pool.query(
-            `UPDATE family_members SET 
-                name = COALESCE($1, name),
-                relation = COALESCE($2, relation),
-                dob = COALESCE($3, dob),
-                gender = COALESCE($4, gender),
-                card_no = COALESCE($5, card_no),
-                valid_upto = COALESCE($6, valid_upto),
-                hospitalization = COALESCE($7, hospitalization),
-                room_limit = COALESCE($8, room_limit),
-                total_limit = COALESCE($9, total_limit),
-                cnic = COALESCE($10, cnic)
-             WHERE id = $11 RETURNING *`,
-            [name, relation, dob || null, gender, card_no, valid_upto || null, hospitalization, room_limit, total_limit, cnic, memberId]
-        );
-
-        if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'Family member not found' });
-        }
-
-        res.json({ success: true, member: result.rows[0] });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-// Delete family member
-app.delete('/api/family/:memberId', async (req, res) => {
-    try {
-        await pool.query('DELETE FROM family_members WHERE id = $1', [req.params.memberId]);
-        res.json({ success: true });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-// ============================================================================
-// POLICY & LIMITS API
-// ============================================================================
-
-// Check user policy status
-app.get('/api/policy/check/:empNo', async (req, res) => {
-    const { empNo } = req.params;
-    try {
-        // 1. Get User Rank (Assuming 'role' or 'designation' in users/registration)
-        // For demo, we'll map empNo patterns or default to 'Staff'
-        const rank = empNo.startsWith('KW-OFF') ? 'Officer' : 'Staff';
-
-        // 2. Get Policy Limits
-        const policyRes = await pool.query('SELECT * FROM policies WHERE rank_name = $1', [rank]);
-        const policy = policyRes.rows[0];
-
-        // 3. Get Current Spending
-        const spentRes = await pool.query('SELECT SUM(medicine_amount) FROM treatment2 WHERE emp_no = $1', [empNo]);
-        const spent = parseFloat(spentRes.rows[0].sum || 0);
-
-        res.json({
-            rank,
-            limit: parseFloat(policy.annual_limit),
-            spent,
-            remaining: parseFloat(policy.annual_limit) - spent,
-            isExceeded: spent >= parseFloat(policy.annual_limit)
-        });
-    } catch (err) {
+        console.error('[DASHBOARD ERROR]', err);
         res.status(500).json({ error: err.message });
     }
 });
@@ -646,7 +360,6 @@ app.post('/api/setup/legacy-schema', async (req, res) => {
                 role TEXT DEFAULT 'user',
                 permissions JSONB DEFAULT '[]',
                 emp_no TEXT,
-                phone TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
 
@@ -681,12 +394,7 @@ app.post('/api/setup/legacy-schema', async (req, res) => {
                 IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='notifications' AND column_name='metadata') THEN
                     ALTER TABLE notifications ADD COLUMN metadata JSONB DEFAULT '{}';
                 END IF;
-
-                -- users additions
-                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='phone') THEN
-                    ALTER TABLE users ADD COLUMN phone TEXT;
-                END IF;
-                END $;
+            END $$;
         `;
         await pool.query(addColumnsQuery);
 
@@ -700,83 +408,15 @@ app.post('/api/setup/legacy-schema', async (req, res) => {
 // AUTHENTICATION ENDPOINTS
 // ============================================================================
 
-app.post('/api/auth/send-otp', async (req, res) => {
-    const { email } = req.body;
-    if (!email) return res.status(400).json({ error: 'Email is required' });
-
-    try {
-        const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
-        const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 mins
-
-        await pool.query(
-            'INSERT INTO otp_verifications (email, code, expires_at) VALUES ($1, $2, $3)',
-            [email, otpCode, expiresAt]
-        );
-
-        if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
-            const mailOptions = {
-                from: process.env.EMAIL_USER,
-                to: email,
-                subject: 'HealFlow Signup OTP',
-                text: `Your OTP for HealFlow signup is: ${otpCode}. It will expire in 10 minutes.`,
-                html: `<div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #eee; border-radius: 5px;">
-                        <h2 style="color: #2563eb;">HealFlow Verification</h2>
-                        <p>Hello,</p>
-                        <p>Your verification code for HealFlow signup is:</p>
-                        <div style="font-size: 32px; font-weight: bold; letter-spacing: 5px; color: #2563eb; margin: 20px 0;">${otpCode}</div>
-                        <p>This code will expire in 10 minutes.</p>
-                        <p>If you did not request this, please ignore this email.</p>
-                      </div>`
-            };
-            await transporter.sendMail(mailOptions);
-            res.json({ success: true, message: 'OTP sent to your email' });
-        } else {
-            console.log(`\n--- [SIMULATED EMAIL] ---\nTo: ${email}\nOTP Code: ${otpCode}\n--------------------------\n`);
-            res.json({ success: true, message: 'OTP simulated (Check server console)' });
-        }
-    } catch (err) {
-        console.error('Email Error:', err);
-        res.status(500).json({ error: 'Failed to send OTP email' });
-    }
-});
-
-app.post('/api/auth/verify-otp', async (req, res) => {
-    const { email, code } = req.body;
-    try {
-        const result = await pool.query(
-            'SELECT * FROM otp_verifications WHERE email = $1 AND code = $2 AND expires_at > NOW() AND verified = FALSE ORDER BY created_at DESC LIMIT 1',
-            [email, code]
-        );
-
-        if (result.rows.length > 0) {
-            const otpId = result.rows[0].id;
-            await pool.query('UPDATE otp_verifications SET verified = TRUE WHERE id = $1', [otpId]);
-            res.json({ success: true, message: 'OTP verified successfully' });
-        } else {
-            res.status(400).json({ error: 'Invalid or expired OTP' });
-        }
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
 app.post('/api/auth/signup', async (req, res) => {
-    const { email, password, fullName, empNo, otpCode } = req.body;
+    const { email, password, fullName, empNo } = req.body;
     try {
-        const otpCheck = await pool.query(
-            'SELECT * FROM otp_verifications WHERE email = $1 AND code = $2 AND verified = TRUE ORDER BY created_at DESC LIMIT 1',
-            [email, otpCode]
-        );
-
-        if (otpCheck.rows.length === 0) {
-            return res.status(400).json({ error: 'Email not verified or OTP expired' });
-        }
-
         const result = await pool.query(
             'INSERT INTO users (email, password, full_name, emp_no, role) VALUES ($1, $2, $3, $4, $5) RETURNING *',
             [email, password, fullName, empNo, 'user']
         );
 
+        // Create notification for admin
         await pool.query(
             'INSERT INTO notifications (type, title, message, status) VALUES ($1, $2, $3, $4)',
             ['new_user', 'New User Registered', `New user ${fullName || email} has signed up.`, 'unread']
@@ -798,26 +438,6 @@ app.post('/api/auth/login', async (req, res) => {
 
         if (result.rows.length > 0) {
             const user = result.rows[0];
-
-            // Send Security Notification Email
-            if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
-                const mailOptions = {
-                    from: process.env.EMAIL_USER,
-                    to: user.email,
-                    subject: 'HealFlow Security Alert: New Login',
-                    html: `<div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #eee; border-radius: 5px;">
-                            <h2 style="color: #2563eb;">Login Security Alert</h2>
-                            <p>Hello <b>${user.full_name || 'User'}</b>,</p>
-                            <p>Your HealFlow Account was just logged into.</p>
-                            <div style="background: #f3f4f6; padding: 15px; border-radius: 5px; margin: 15px 0;">
-                                <b>Time:</b> ${new Date().toLocaleString()}<br>
-                                <b>Location:</b> (HealFlow Medical Management System)
-                            </div>
-                            <p>If this was not you, please contact the administrator immediately.</p>
-                          </div>`
-                };
-                transporter.sendMail(mailOptions).catch(e => console.error('Login Email Fail:', e.message));
-            }
 
             // Create login notification for admin (if user is not admin themselves)
             if (user.role !== 'admin') {
@@ -890,47 +510,6 @@ app.get('/api/users', async (req, res) => {
     }
 });
 
-// Admin-only Create User (Bypasses OTP)
-app.post('/api/users', async (req, res) => {
-    const { email, password, full_name, role, emp_no, phone } = req.body;
-
-    if (!email || !password) {
-        return res.status(400).json({ error: 'Email and password are required' });
-    }
-
-    try {
-        // Check if user already exists
-        const checkUser = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
-        if (checkUser.rows.length > 0) {
-            return res.status(400).json({ error: 'A user with this email already exists' });
-        }
-
-        const result = await pool.query(
-            'INSERT INTO users (email, password, full_name, role, emp_no, phone) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
-            [email, password, full_name, role || 'user', emp_no, phone]
-        );
-
-        // Notify admins
-        await pool.query(
-            'INSERT INTO notifications (type, title, message, status) VALUES ($1, $2, $3, $4)',
-            ['new_user', 'User Created (Admin)', `Admin created new account for ${full_name || email}.`, 'unread']
-        );
-
-        res.status(201).json({
-            success: true,
-            user: {
-                id: result.rows[0].id,
-                email: result.rows[0].email,
-                name: result.rows[0].full_name,
-                role: result.rows[0].role,
-                empNo: result.rows[0].emp_no
-            }
-        });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
 app.patch('/api/users/:id/role', async (req, res) => {
     const { id } = req.params;
     const { role } = req.body;
@@ -958,7 +537,7 @@ app.post('/api/treatment/validate-cycle', async (req, res) => {
         const allowMonth = `${monthNames[date.getMonth()]}-${date.getFullYear()}`;
 
         // Fetch additional details from Registration table
-        const result = await pool.query('SELECT * FROM registration WHERE emp_no = $1', [empNo]);
+        const result = await pool.query('SELECT * FROM Registration WHERE Emp_no = $1', [empNo]);
         const employeeDetails = result.rows[0] || null;
 
         res.json({
@@ -967,15 +546,14 @@ app.post('/api/treatment/validate-cycle', async (req, res) => {
             cycleNo,
             allowMonth,
             employee: employeeDetails ? {
-                id: employeeDetails.id,
-                empNo: employeeDetails.emp_no,
-                name: employeeDetails.emp_name,
-                bookNo: employeeDetails.book_no,
-                patientNic: employeeDetails.patient_nic,
-                patientType: employeeDetails.patient_type,
+                empNo: employeeDetails.Emp_no,
+                name: employeeDetails.Emp_name,
+                bookNo: employeeDetails.Book_no,
+                patientNic: employeeDetails.Patient_nic,
+                patientType: employeeDetails.Patient_type,
             } : null,
             message: employeeDetails
-                ? `Employee ${employeeDetails.emp_name} validated for Cycle ${cycleNo} of ${allowMonth}`
+                ? `Employee ${employeeDetails.Emp_name} validated for Cycle ${cycleNo} of ${allowMonth}`
                 : `Employee ${empNo} validated (New Record) for Cycle ${cycleNo} of ${allowMonth}`
         });
     } catch (err) {
@@ -1150,17 +728,17 @@ app.post('/api/treatment/commit', async (req, res) => {
 // Get All Patients (Registration)
 app.get('/api/patients', async (req, res) => {
     try {
-        const result = await pool.query('SELECT * FROM registration ORDER BY id DESC LIMIT 100');
+        const result = await pool.query('SELECT * FROM Registration ORDER BY Id DESC LIMIT 100');
         res.json(result.rows.map(row => ({
-            id: row.id.toString(),
-            empNo: row.emp_no,
-            name: row.emp_name,
-            bookNo: row.book_no,
-            cnic: row.patient_nic,
-            phone: row.phone,
-            patientType: row.patient_type,
-            rfid_tag: row.rfid_tag,
-            custom_fields: row.custom_fields
+            id: row.Id.toString(),
+            empNo: row.Emp_no,
+            name: row.Emp_name,
+            bookNo: row.Book_no,
+            cnic: row.Patient_nic,
+            phone: row.Phone,
+            patientType: row.Patient_type,
+            rfid_tag: row.RFID_Tag,
+            custom_fields: row.Custom_fields
         })));
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -1172,16 +750,16 @@ app.post('/api/patients', async (req, res) => {
     const { empNo, name, bookNo, cnic, phone, patientType, custom_fields } = req.body;
     try {
         const query = `
-            INSERT INTO registration (emp_no, emp_name, book_no, patient_nic, phone, patient_type, custom_fields)
+            INSERT INTO Registration (Emp_no, Emp_name, Book_no, Patient_nic, Phone, Patient_type, Custom_fields)
             VALUES ($1, $2, $3, $4, $5, $6, $7)
-            ON CONFLICT (emp_no) DO UPDATE SET
-                emp_name = EXCLUDED.emp_name,
-                book_no = EXCLUDED.book_no,
-                patient_nic = EXCLUDED.patient_nic,
-                phone = EXCLUDED.phone,
-                patient_type = EXCLUDED.patient_type,
-                custom_fields = EXCLUDED.custom_fields
-            RETURNING id
+            ON CONFLICT (Emp_no) DO UPDATE SET
+                Emp_name = EXCLUDED.Emp_name,
+                Book_no = EXCLUDED.Book_no,
+                Patient_nic = EXCLUDED.Patient_nic,
+                Phone = EXCLUDED.Phone,
+                Patient_type = EXCLUDED.Patient_type,
+                Custom_fields = EXCLUDED.Custom_fields
+            RETURNING Id
         `;
         const result = await pool.query(query, [empNo, name, bookNo, cnic, phone, patientType, JSON.stringify(custom_fields)]);
 
@@ -1199,23 +777,60 @@ app.post('/api/patients', async (req, res) => {
 
 app.get('/api/patients/:id', async (req, res) => {
     try {
-        const result = await pool.query('SELECT * FROM registration WHERE id = $1', [req.params.id]);
+        const result = await pool.query('SELECT * FROM Registration WHERE Id = $1', [req.params.id]);
         if (result.rows.length === 0) {
             return res.status(404).json({ error: 'Patient not found' });
         }
         const row = result.rows[0];
         res.json({
-            id: row.id.toString(),
-            empNo: row.emp_no,
-            name: row.emp_name,
-            bookNo: row.book_no,
-            cnic: row.patient_nic,
-            phone: row.phone,
-            patientType: row.patient_type,
-            rfid_tag: row.rfid_tag,
-            custom_fields: row.custom_fields
+            id: row.Id.toString(),
+            empNo: row.Emp_no,
+            name: row.Emp_name,
+            bookNo: row.Book_no,
+            cnic: row.Patient_nic,
+            phone: row.Phone,
+            patientType: row.Patient_type,
+            rfid_tag: row.RFID_Tag,
+            custom_fields: row.Custom_fields
         });
     } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Get All Employees (Paginated)
+app.get('/api/employees', async (req, res) => {
+    try {
+        const { search, limit = 20, offset = 0 } = req.query;
+        let query = 'SELECT * FROM Registration';
+        let countQuery = 'SELECT COUNT(*) FROM Registration';
+        const params = [];
+
+        if (search) {
+            query += ' WHERE Emp_no ILIKE $1 OR Emp_name ILIKE $1 OR Patient_nic ILIKE $1';
+            countQuery += ' WHERE Emp_no ILIKE $1 OR Emp_name ILIKE $1 OR Patient_nic ILIKE $1';
+            params.push(`%${search}%`);
+        }
+
+        query += ' ORDER BY Id DESC LIMIT $' + (params.length + 1) + ' OFFSET $' + (params.length + 2);
+
+        const employeesResult = await pool.query(query, [...params, parseInt(limit), parseInt(offset)]);
+        const totalResult = await pool.query(countQuery, params);
+
+        res.json({
+            employees: employeesResult.rows.map(row => ({
+                emp_no: row.emp_no,
+                emp_name: row.emp_name,
+                nic: row.patient_nic,
+                phone: row.phone,
+                patient_type: row.patient_type,
+                status: 'Active', // Default status for registration
+                ...row.custom_fields // Spread custom fields
+            })),
+            total: parseInt(totalResult.rows[0].count)
+        });
+    } catch (err) {
+        console.error('[EMPLOYEES ERROR]', err);
         res.status(500).json({ error: err.message });
     }
 });
@@ -1223,7 +838,7 @@ app.get('/api/patients/:id', async (req, res) => {
 app.post('/api/patients/:id/link-card', async (req, res) => {
     try {
         const { rfidTag } = req.body;
-        await pool.query('UPDATE registration SET rfid_tag = $1 WHERE id = $2', [rfidTag, req.params.id]);
+        await pool.query('UPDATE Registration SET RFID_Tag = $1 WHERE Id = $2', [rfidTag, req.params.id]);
         res.json({ success: true, message: 'RFID card linked successfully' });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -1232,21 +847,21 @@ app.post('/api/patients/:id/link-card', async (req, res) => {
 
 app.get('/api/patients/by-tag/:tag', async (req, res) => {
     try {
-        const result = await pool.query('SELECT * FROM registration WHERE rfid_tag = $1', [req.params.tag]);
+        const result = await pool.query('SELECT * FROM Registration WHERE RFID_Tag = $1', [req.params.tag]);
         if (result.rows.length === 0) {
             return res.status(404).json({ error: 'No patient found with this RFID tag' });
         }
         const row = result.rows[0];
         res.json({
-            id: row.id.toString(),
-            empNo: row.emp_no,
-            name: row.emp_name,
-            bookNo: row.book_no,
-            cnic: row.patient_nic,
-            phone: row.phone,
-            patientType: row.patient_type,
-            rfid_tag: row.rfid_tag,
-            custom_fields: row.custom_fields
+            id: row.Id.toString(),
+            empNo: row.Emp_no,
+            name: row.Emp_name,
+            bookNo: row.Book_no,
+            cnic: row.Patient_nic,
+            phone: row.Phone,
+            patientType: row.Patient_type,
+            rfid_tag: row.RFID_Tag,
+            custom_fields: row.Custom_fields
         });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -1266,7 +881,6 @@ const initSchema = async () => {
                 role TEXT DEFAULT 'user',
                 permissions JSONB DEFAULT '[]',
                 emp_no TEXT,
-                phone TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
 
@@ -1280,15 +894,6 @@ const initSchema = async () => {
                 patient_type TEXT,
                 rfid_tag TEXT,
                 custom_fields JSONB,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-
-            CREATE TABLE IF NOT EXISTS otp_verifications (
-                id SERIAL PRIMARY KEY,
-                phone TEXT NOT NULL,
-                code TEXT NOT NULL,
-                expires_at TIMESTAMP NOT NULL,
-                verified BOOLEAN DEFAULT FALSE,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
 
@@ -1307,12 +912,21 @@ const initSchema = async () => {
                 serial_no SERIAL PRIMARY KEY,
                 treatment TEXT,
                 emp_no TEXT,
-                phone TEXT,
                 emp_name TEXT,
                 visit_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 patient_name TEXT,
                 qr_code TEXT,
                 medicine_amount DECIMAL(10,2),
+                medicine1 TEXT, price1 DECIMAL(10,2),
+                medicine2 TEXT, price2 DECIMAL(10,2),
+                medicine3 TEXT, price3 DECIMAL(10,2),
+                medicine4 TEXT, price4 DECIMAL(10,2),
+                medicine5 TEXT, price5 DECIMAL(10,2),
+                medicine6 TEXT, price6 DECIMAL(10,2),
+                medicine7 TEXT, price7 DECIMAL(10,2),
+                medicine8 TEXT, price8 DECIMAL(10,2),
+                medicine9 TEXT, price9 DECIMAL(10,2),
+                medicine10 TEXT, price10 DECIMAL(10,2),
                 lab_name TEXT,
                 hospital_name TEXT,
                 hospital_type TEXT,
@@ -1322,7 +936,12 @@ const initSchema = async () => {
                 store TEXT,
                 book_no TEXT,
                 invoice_no TEXT,
-                description TEXT
+                description TEXT,
+                patient_type TEXT,
+                patient_nic TEXT,
+                refrence TEXT,
+                vendor TEXT,
+                patient TEXT
             );
 
             CREATE TABLE IF NOT EXISTS medical_cards (
@@ -1331,7 +950,6 @@ const initSchema = async () => {
                 card_no TEXT,
                 participant_name TEXT,
                 emp_no TEXT,
-                phone TEXT,
                 cnic TEXT,
                 customer_no TEXT,
                 dob DATE,
@@ -1363,6 +981,34 @@ const initSchema = async () => {
                 IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='treatment2' AND column_name='book_no') THEN
                     ALTER TABLE treatment2 ADD COLUMN book_no TEXT;
                 END IF;
+
+                -- Add medicine columns
+                FOR i IN 1..10 LOOP
+                    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='treatment2' AND column_name='medicine' || i) THEN
+                        EXECUTE 'ALTER TABLE treatment2 ADD COLUMN medicine' || i || ' TEXT';
+                    END IF;
+                    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='treatment2' AND column_name='price' || i) THEN
+                        EXECUTE 'ALTER TABLE treatment2 ADD COLUMN price' || i || ' DECIMAL(10,2)';
+                    END IF;
+                END LOOP;
+
+                -- Add other missing columns
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='treatment2' AND column_name='patient_type') THEN
+                    ALTER TABLE treatment2 ADD COLUMN patient_type TEXT;
+                END IF;
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='treatment2' AND column_name='patient_nic') THEN
+                    ALTER TABLE treatment2 ADD COLUMN patient_nic TEXT;
+                END IF;
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='treatment2' AND column_name='refrence') THEN
+                    ALTER TABLE treatment2 ADD COLUMN refrence TEXT;
+                END IF;
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='treatment2' AND column_name='vendor') THEN
+                    ALTER TABLE treatment2 ADD COLUMN vendor TEXT;
+                END IF;
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='treatment2' AND column_name='patient') THEN
+                    ALTER TABLE treatment2 ADD COLUMN patient TEXT;
+                END IF;
+
                 -- registration additions
                 IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='registration' AND column_name='emp_no') THEN
                     ALTER TABLE registration ADD COLUMN emp_no TEXT;
@@ -1382,13 +1028,8 @@ const initSchema = async () => {
 };
 
 // Start Server
-if (process.env.NODE_ENV !== 'production') {
-    app.listen(PORT, async () => {
-        console.log(`Server running on http://localhost:${PORT}`);
-        console.log('Database: PostgreSQL via Supabase');
-        await initSchema();
-    });
-}
-
-// Export for Vercel
-module.exports = app;
+app.listen(PORT, async () => {
+    console.log(`Server running on http://localhost:${PORT}`);
+    console.log('Database: PostgreSQL via Supabase');
+    await initSchema();
+});
