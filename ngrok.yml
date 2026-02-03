@@ -1,0 +1,11 @@
+version: 3
+agent:
+  authtoken: 38ztRm7ONTZVzhVgjEYC3jrfUfY_3PkSd2GkHrqVQxGLH3ZKG
+tunnels:
+  frontend:
+    proto: http
+    addr: 8080
+    domain: lionel-immeasurable-suzan.ngrok-free.dev
+  backend:
+    proto: http
+    addr: 5000

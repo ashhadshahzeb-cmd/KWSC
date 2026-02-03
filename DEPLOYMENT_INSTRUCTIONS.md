@@ -1,4 +1,4 @@
-# HEALFLOW DEPLOYMENT GUIDE (VERCEL)
+# KWSC DEPLOYMENT GUIDE (VERCEL)
 
 Doston, is file me wo tamam maloomat hain jo aapko Vercel par deployment ke liye chahiye.
 

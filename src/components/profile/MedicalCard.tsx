@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
-import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { CreditCard, ShieldCheck, Calendar, MapPin, User, Info } from 'lucide-react';
+import { ShieldCheck, Phone, Globe, CreditCard } from 'lucide-react';
+import { cn } from "@/lib/utils";
 
 interface MedicalCardProps {
     data: {
@@ -18,170 +17,183 @@ interface MedicalCardProps {
         room_limit: string;
         normal_delivery: string;
         c_section_limit: string;
+        total_limit?: number;
+        spent_amount?: number;
+        remaining_balance?: number;
+        [key: string]: any;
     };
 }
 
 const MedicalCard = ({ data }: MedicalCardProps) => {
     const [isFlipped, setIsFlipped] = useState(false);
 
+    // Network background pattern
+    const networkPattern = `
+        radial-gradient(circle at 10% 20%, rgba(255, 255, 255, 0.05) 0%, transparent 20%),
+        radial-gradient(circle at 90% 80%, rgba(255, 255, 255, 0.05) 0%, transparent 20%),
+        linear-gradient(45deg, rgba(30, 41, 59, 1) 0%, rgba(15, 23, 42, 1) 100%)
+    `;
+
     return (
-        <div
-            className="relative w-full max-w-md aspect-[1.6/1] perspective-1000 cursor-pointer group"
-            onClick={() => setIsFlipped(!isFlipped)}
-        >
-            <div className={`relative w-full h-full transition-all duration-700 preserve-3d ${isFlipped ? 'rotate-y-180' : ''}`}>
+        <div className="flex flex-col gap-6 items-center print:block print:w-full print:h-full">
+            <div
+                className="relative w-[85.6mm] h-[53.98mm] perspective-1000 cursor-pointer group print:hidden"
+                onClick={() => setIsFlipped(!isFlipped)}
+            >
+                <div className={cn(
+                    "relative w-full h-full transition-all duration-700 preserve-3d shadow-2xl rounded-xl",
+                    isFlipped ? 'rotate-y-180' : ''
+                )}>
+                    {/* Front Side Display */}
+                    <div className="absolute inset-0 backface-hidden w-full h-full">
+                        <FrontSide data={data} background={networkPattern} />
+                    </div>
 
-                {/* Front Side */}
-                <div className="absolute inset-0 backface-hidden w-full h-full">
-                    <Card className="w-full h-full glass-card border-primary/20 bg-gradient-to-br from-primary/10 via-card to-background p-6 flex flex-col justify-between overflow-hidden relative">
-                        {/* Decorative Background Patterns */}
-                        <div className="absolute -top-10 -right-10 w-40 h-40 bg-primary/10 rounded-full blur-3xl" />
-                        <div className="absolute -bottom-10 -left-10 w-40 h-40 bg-secondary/10 rounded-full blur-3xl" />
-
-                        {/* Header */}
-                        <div className="flex justify-between items-start relative z-10">
-                            <div className="flex flex-col">
-                                <div className="flex items-center gap-2 mb-1">
-                                    <div className="p-1.5 rounded-lg bg-primary/10">
-                                        <ShieldCheck className="w-5 h-5 text-primary" />
-                                    </div>
-                                    <span className="font-bold text-lg tracking-tight bg-gradient-to-r from-primary to-primary-foreground bg-clip-text text-transparent">
-                                        MEDICAL CARD
-                                    </span>
-                                </div>
-                                <Badge variant="outline" className="w-fit text-[10px] font-medium tracking-widest uppercase border-primary/30 text-primary">
-                                    Premium Health Member
-                                </Badge>
-                            </div>
-                            <div className="text-right">
-                                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">Virtual Card No</p>
-                                <p className="font-mono text-sm leading-none text-foreground">{data.card_no}</p>
-                            </div>
-                        </div>
-
-                        {/* Content Body */}
-                        <div className="grid grid-cols-2 gap-y-4 gap-x-2 relative z-10">
-                            <div className="space-y-0.5">
-                                <p className="text-[9px] uppercase tracking-wider text-muted-foreground">Participant Name</p>
-                                <p className="text-sm font-semibold truncate flex items-center gap-1.5">
-                                    <User className="w-3 h-3 text-primary/50" /> {data.participant_name}
-                                </p>
-                            </div>
-                            <div className="space-y-0.5">
-                                <p className="text-[9px] uppercase tracking-wider text-muted-foreground">Employee No</p>
-                                <p className="text-sm font-semibold truncate">{data.emp_no}</p>
-                            </div>
-                            <div className="space-y-0.5">
-                                <p className="text-[9px] uppercase tracking-wider text-muted-foreground">CNIC / ID</p>
-                                <p className="text-sm font-semibold truncate">{data.cnic}</p>
-                            </div>
-                            <div className="space-y-0.5">
-                                <p className="text-[9px] uppercase tracking-wider text-muted-foreground">Customer No</p>
-                                <p className="text-sm font-semibold truncate">{data.customer_no}</p>
-                            </div>
-                        </div>
-
-                        {/* Footer */}
-                        <div className="flex justify-between items-end border-t border-border/50 pt-3 mt-2 relative z-10">
-                            <div className="flex gap-4">
-                                <div className="space-y-0.5">
-                                    <p className="text-[8px] uppercase tracking-widest text-muted-foreground">Branch</p>
-                                    <p className="text-[10px] font-bold flex items-center gap-1">
-                                        <MapPin className="w-2.5 h-2.5" /> {data.branch}
-                                    </p>
-                                </div>
-                                <div className="space-y-0.5">
-                                    <p className="text-[8px] uppercase tracking-widest text-muted-foreground">Valid Upto</p>
-                                    <p className="text-[10px] font-bold flex items-center gap-1 text-primary">
-                                        <Calendar className="w-2.5 h-2.5" /> {new Date(data.valid_upto).toLocaleDateString()}
-                                    </p>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-1 animate-pulse">
-                                <Info className="w-3 h-3 text-primary/40" />
-                                <span className="text-[8px] font-medium text-muted-foreground uppercase tracking-widest">Click to Flip</span>
-                            </div>
-                        </div>
-                    </Card>
+                    {/* Back Side Display */}
+                    <div className="absolute inset-0 backface-hidden w-full h-full rotate-y-180">
+                        <BackSide data={data} background={networkPattern} />
+                    </div>
                 </div>
+            </div>
 
-                {/* Back Side */}
-                <div className="absolute inset-0 backface-hidden w-full h-full rotate-y-180">
-                    <Card className="w-full h-full glass-card border-primary/20 bg-card p-6 flex flex-col overflow-hidden relative">
-                        <div className="absolute inset-0 bg-primary/[0.02] pointer-events-none" />
-
-                        <div className="flex items-center gap-2 mb-4">
-                            <ShieldCheck className="w-4 h-4 text-primary" />
-                            <h4 className="text-xs font-bold uppercase tracking-widest bg-muted rounded-full px-2.5 py-0.5">MEMBER BENEFITS</h4>
-                        </div>
-
-                        <div className="flex-1 grid grid-cols-2 gap-x-6 gap-y-3">
-                            <div className="space-y-0.5 text-primary">
-                                <p className="text-[10px] opacity-70 font-medium">Total Limit (Rs)</p>
-                                <p className="text-sm font-bold truncate">{(data as any).total_limit?.toLocaleString() || '100,000'}</p>
-                            </div>
-                            <div className="space-y-0.5 text-warning">
-                                <p className="text-[10px] opacity-70 font-medium">Spent (Rs)</p>
-                                <p className="text-sm font-bold truncate">{(data as any).spent_amount?.toLocaleString() || '0'}</p>
-                            </div>
-
-                            <div className="col-span-2 space-y-2 py-2 border-y border-border/50 my-1">
-                                <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-widest">
-                                    <span>Remaining Balance</span>
-                                    <span className="text-primary font-mono">Rs. {(data as any).remaining_balance?.toLocaleString() || (data as any).total_limit?.toLocaleString() || '100,000'}</span>
-                                </div>
-                                <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
-                                    <div
-                                        className="h-full bg-primary transition-all duration-1000"
-                                        style={{ width: `${Math.min(100, (1 - ((data as any).spent_amount || 0) / ((data as any).total_limit || 100000)) * 100)}%` }}
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="space-y-0.5">
-                                <p className="text-[10px] text-muted-foreground font-medium">Hospitalization</p>
-                                <p className="text-xs font-bold text-foreground truncate">{data.hospitalization}</p>
-                            </div>
-                            <div className="space-y-0.5">
-                                <p className="text-[10px] text-muted-foreground font-medium">Room Limit</p>
-                                <p className="text-xs font-bold text-foreground truncate">{data.room_limit}</p>
-                            </div>
-                        </div>
-
-                        {/* Family Section */}
-                        {(data as any).family_members && (data as any).family_members.length > 0 && (
-                            <div className="mt-2 pt-2 border-t border-border/50">
-                                <p className="text-[9px] font-bold uppercase tracking-wider mb-1">Covered Dependents</p>
-                                <div className="grid grid-cols-2 gap-1">
-                                    {(data as any).family_members.slice(0, 4).map((m: any, i: number) => (
-                                        <div key={i} className="text-[10px] bg-muted/50 px-1 py-0.5 rounded flex justify-between">
-                                            <span className="truncate max-w-[60px]">{m.name}</span>
-                                            <span className="opacity-70 text-[8px] uppercase">{m.relation}</span>
-                                        </div>
-                                    ))}
-                                    {(data as any).family_members.length > 4 && (
-                                        <div className="text-[9px] opacity-70 italic">+{(data as any).family_members.length - 4} more</div>
-                                    )}
-                                </div>
-                            </div>
-                        )}
-
-                        <div className="mt-2 pt-2 border-t border-border/50 flex flex-col items-center justify-center gap-1">
-                            <p className="text-[8px] text-muted-foreground uppercase tracking-tighter text-center">VALID AT AUTHORIZED CENTERS ONLY</p>
-                        </div>
-                    </Card>
+            {/* Print View - Shows both sides stacked */}
+            <div className="hidden print:flex print:flex-col print:gap-8 print:items-center print:justify-center print:w-full print:h-screen">
+                <div className="w-[85.6mm] h-[53.98mm] shadow-none print:break-inside-avoid print:border print:border-gray-300 rounded-xl overflow-hidden">
+                    <FrontSide data={data} background={networkPattern} />
                 </div>
-
+                <div className="w-[85.6mm] h-[53.98mm] shadow-none print:break-inside-avoid print:border print:border-gray-300 rounded-xl overflow-hidden">
+                    <BackSide data={data} background={networkPattern} />
+                </div>
             </div>
 
             <style>{`
-        .perspective-1000 { perspective: 1000px; }
-        .preserve-3d { transform-style: preserve-3d; }
-        .backface-hidden { backface-visibility: hidden; }
-        .rotate-y-180 { transform: rotateY(180deg); }
-      `}</style>
+                .perspective-1000 { perspective: 1000px; }
+                .preserve-3d { transform-style: preserve-3d; }
+                .backface-hidden { backface-visibility: hidden; }
+                .rotate-y-180 { transform: rotateY(180deg); }
+            `}</style>
         </div>
     );
 };
+
+const FrontSide = ({ data, background }: { data: any, background: string }) => (
+    <div
+        className="w-full h-full relative text-white p-5 flex flex-col justify-between overflow-hidden rounded-xl"
+        style={{ background }}
+    >
+        {/* Subtle Network Lines (CSS Overlay) */}
+        <div className="absolute inset-0 opacity-10 pointer-events-none"
+            style={{
+                backgroundImage: 'radial-gradient(circle, #ffffff 1px, transparent 1px)',
+                backgroundSize: '20px 20px'
+            }}
+        />
+
+        {/* Header */}
+        <div className="flex justify-between items-start relative z-10">
+            <div className="flex items-center gap-2">
+                <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-green-700 rounded-bl-xl rounded-tr-xl flex items-center justify-center shadow-lg">
+                    <ShieldCheck className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                    <h1 className="text-lg font-bold leading-tight tracking-wide">HEALFLOW</h1>
+                    <p className="text-[8px] text-gray-400 uppercase tracking-wider">Health Insurance</p>
+                </div>
+            </div>
+            <span className="text-[10px] font-medium tracking-widest text-gray-400 uppercase border border-gray-600 px-2 py-0.5 rounded">
+                Member Card
+            </span>
+        </div>
+
+        {/* Content */}
+        <div className="flex justify-between items-end relative z-10 mt-2">
+            {/* Left Details Box */}
+            <div className="border border-gray-600 rounded bg-black/20 p-2 min-w-[180px] backdrop-blur-sm">
+                <div className="grid grid-cols-[auto,1fr] gap-x-3 gap-y-1 text-[9px]">
+                    <span className="text-gray-400 font-medium uppercase">Name:</span>
+                    <span className="font-bold uppercase truncate max-w-[120px]">{data.participant_name}</span>
+
+                    <span className="text-gray-400 font-medium uppercase">Member ID:</span>
+                    <span className="font-mono font-bold">{data.card_no}</span>
+
+                    <span className="text-gray-400 font-medium uppercase">Emp No:</span>
+                    <span className="font-mono">{data.emp_no}</span>
+                </div>
+            </div>
+
+            {/* Right Watermark Area */}
+            <div className="text-right flex flex-col items-end">
+                <ShieldCheck className="w-16 h-16 text-white/5 absolute bottom-12 right-4" />
+                <div className="text-[9px] text-gray-400 mb-1 uppercase tracking-wider">Primary Branch</div>
+                <div className="font-bold text-xs uppercase">{data.branch || 'Main Campus'}</div>
+            </div>
+        </div>
+
+        {/* Footer */}
+        <div className="flex justify-between items-center text-[8px] uppercase tracking-wider text-gray-400 relative z-10 border-t border-gray-700/50 pt-2 mt-1">
+            <div className="flex gap-4">
+                <div>
+                    <span className="mr-1 opacity-70">Valid From:</span>
+                    <span className="text-white font-mono">{new Date().toLocaleDateString()}</span>
+                </div>
+                <div>
+                    <span className="mr-1 opacity-70">Expires:</span>
+                    <span className="text-white font-mono">{new Date(data.valid_upto).toLocaleDateString()}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+);
+
+const BackSide = ({ data, background }: { data: any, background: string }) => (
+    <div
+        className="w-full h-full relative text-white p-4 flex flex-col justify-between overflow-hidden rounded-xl"
+        style={{ background }}
+    >
+        {/* Contact Info Header */}
+        <div className="text-center relative z-10 space-y-0.5">
+            <h3 className="text-[9px] uppercase font-bold tracking-widest text-gray-300">Emergency Contact</h3>
+            <div className="flex items-center justify-center gap-1.5 text-base font-bold text-green-400">
+                <Phone className="w-3.5 h-3.5 fill-current" />
+                <span>1-800-HEALFLOW</span>
+            </div>
+            <p className="text-[8px] text-gray-500">Provider Hotline: 1-887-HEALTHY</p>
+        </div>
+
+        {/* Barcode & Benefits */}
+        <div className="flex flex-col items-center justify-center relative z-10">
+            <div className="bg-white p-2 rounded w-4/5 flex flex-col items-center">
+                {/* Fake Barcode using CSS */}
+                <div className="h-7 w-full flex items-end justify-center gap-[2px] overflow-hidden opacity-80">
+                    {Array.from({ length: 40 }).map((_, i) => (
+                        <div key={i} className="bg-black" style={{ width: Math.random() > 0.5 ? 2 : 1, height: '100%' }} />
+                    ))}
+                </div>
+                <span className="text-[7px] text-black font-mono font-bold tracking-[0.2em] mt-1">SCAN FOR BENEFITS</span>
+            </div>
+        </div>
+
+        {/* Disclaimer */}
+        <div className="text-[6.5px] text-center text-gray-500 leading-tight relative z-10 px-3">
+            IMPORTANT: PRESENT THIS CARD TO YOUR PROVIDER AT EACH VISIT.
+            FOR A LIST OF PARTICIPATING PROVIDERS, VISIT OUR WEBSITE.
+        </div>
+
+        {/* Footer */}
+        <div className="flex justify-between items-end relative z-10">
+            <div className="flex items-center gap-1 text-[7px] text-green-400/80">
+                <Globe className="w-2.5 h-2.5" />
+                <span>www.healflow.com</span>
+            </div>
+            <div className="text-right">
+                <div className="w-20 border-b border-gray-600 mb-0.5" />
+                <p className="text-[6.5px] text-gray-500 uppercase tracking-widest">Authorized Signature</p>
+            </div>
+        </div>
+        <div className="absolute bottom-2 right-2 opacity-20">
+            <ShieldCheck className="w-7 h-7 text-white" />
+        </div>
+    </div>
+);
 
 export default MedicalCard;

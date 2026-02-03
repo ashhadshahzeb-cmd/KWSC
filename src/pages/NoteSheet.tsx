@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Save, RotateCcw, ArrowRight, ArrowLeft, Search, FileText, CheckCircle, Printer, AlertTriangle } from "lucide-react";
 import { apiCall } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -72,10 +72,17 @@ const NoteSheet = () => {
         }
     };
 
-    // Initialize from context
+    const lastSyncedId = useRef<string | null>(null);
+
+    // Initialize from context (Auto-fill)
     useEffect(() => {
-        if (employee) {
-            setEmpNo(employee.empNo);
+        const syncKey = employee ? `${employee.id}-${employee.empNo}` : null;
+        if (employee && syncKey !== lastSyncedId.current) {
+            setId(employee.id || "");
+            setEmpNo(employee.empNo || "");
+            lastSyncedId.current = syncKey;
+        } else if (!employee) {
+            lastSyncedId.current = null;
         }
     }, [employee]);
 

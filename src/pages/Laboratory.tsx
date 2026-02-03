@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, ArrowRight, Search, CheckCircle, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -43,6 +43,20 @@ const Laboratory = () => {
   useEffect(() => {
     loadRecords();
   }, []);
+
+  const lastSyncedId = useRef<string | null>(null);
+
+  // Sync local state when employee changes in context (Auto-fill)
+  useEffect(() => {
+    const syncKey = employee ? `${employee.id}-${employee.empNo}` : null;
+    if (employee && syncKey !== lastSyncedId.current) {
+      setEmpNo(employee.empNo || "");
+      setEmpName(employee.name || "");
+      lastSyncedId.current = syncKey;
+    } else if (!employee) {
+      lastSyncedId.current = null;
+    }
+  }, [employee]);
 
   const loadRecords = async () => {
     setLoadingRecords(true);

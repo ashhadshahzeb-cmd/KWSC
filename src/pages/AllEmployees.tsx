@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { FieldCustomizer } from "@/components/admin/FieldCustomizer";
 import { useAuth } from "@/contexts/AuthContext";
 
-const API_BASE = import.meta.env.PROD ? '/api' : (import.meta.env.VITE_API_URL || 'http://localhost:5000/api');
+const API_BASE = (import.meta.env.VITE_API_BASE_URL ? `${import.meta.env.VITE_API_BASE_URL}/api` : undefined) || (import.meta.env.PROD ? '/api' : 'http://localhost:5000/api');
 
 interface Employee {
     emp_no: string;
@@ -46,7 +46,11 @@ const AllEmployees = () => {
             });
             if (searchTerm) params.append('search', searchTerm);
 
-            const res = await fetch(`${API_BASE}/employees?${params}`);
+            const res = await fetch(`${API_BASE}/employees?${params}`, {
+                headers: {
+                    'ngrok-skip-browser-warning': 'true'
+                }
+            });
             const data = await res.json();
 
             if (res.ok) {

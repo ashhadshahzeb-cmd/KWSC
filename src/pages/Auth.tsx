@@ -185,7 +185,7 @@ const Auth = () => {
                 {isLogin ? "Welcome Back" : "Create Account"}
               </h2>
               <p className="text-muted-foreground">
-                {isLogin ? "Sign in to your account" : "Join HealFlow Medical System"}
+                {isLogin ? "Sign in to your account" : "Join KWSC Medical System"}
               </p>
             </div>
 
@@ -347,7 +347,7 @@ const Auth = () => {
                     type="button"
                     variant="outline"
                     size="sm"
-                    onClick={() => setFormData({ ...formData, email: "admin@healflow.com", password: "Admin" })}
+                    onClick={() => setFormData({ ...formData, email: "admin@kwsc.com", password: "Admin" })}
                     className="text-xs"
                   >
                     Admin Demo

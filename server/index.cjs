@@ -1,4 +1,4 @@
-// HealFlow Backend Server - SQL Server Version
+// KWSC Backend Server - SQL Server Version
 const express = require('express');
 const cors = require('cors');
 const { v4: uuidv4 } = require('uuid');
@@ -26,7 +26,7 @@ app.use((req, res, next) => {
 
 // Root route for status check
 app.get('/', (req, res) => {
-    res.json({ message: 'HealFlow API is running', env: process.env.NODE_ENV });
+    res.json({ message: 'KWSC API is running', env: process.env.NODE_ENV });
 });
 
 // Standalone ping for quick verification

@@ -44,10 +44,10 @@ const newSendOtp = `app.post('/api/auth/send-otp', async (req, res) => {
             const mailOptions = {
                 from: process.env.EMAIL_USER,
                 to: email,
-                subject: 'HealFlow Signup OTP',
-                text: \`Your OTP for HealFlow signup is: \${otpCode}. It will expire in 10 minutes.\`,
+                subject: 'KWSC Signup OTP',
+                text: \`Your OTP for KWSC signup is: \${otpCode}. It will expire in 10 minutes.\`,
                 html: \`<div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #eee; border-radius: 5px;">
-                        <h2 style="color: #2563eb;">HealFlow Verification</h2>
+                        <h2 style="color: #2563eb;">KWSC Verification</h2>
                         <p>Hello,</p>
                         <p>Your verification code for HealFlow signup is:</p>
                         <div style="font-size: 32px; font-weight: bold; letter-spacing: 5px; color: #2563eb; margin: 20px 0;">\${otpCode}</div>

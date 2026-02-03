@@ -1,7 +1,7 @@
 {
-  "name": "healflow-server",
+  "name": "kwsc-server",
   "version": "1.0.0",
-  "description": "Secure MSSQL Backend for Healflow",
+  "description": "Secure MSSQL Backend for KWSC",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",

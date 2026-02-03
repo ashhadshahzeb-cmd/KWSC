@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useCallback, useMemo } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { sqlApi, type TreatmentItem, type Employee, type TreatmentPayload } from '@/lib/api';
 
@@ -24,7 +24,16 @@ interface TreatmentContextType {
     treatmentType?: string;
 
     // Actions
-    setEmployee: (emp: Employee) => Promise<boolean>;
+    setEmployee: (emp: {
+        empNo?: string;
+        id?: string;
+        name?: string;
+        bookNo?: string;
+        patientType?: string;
+        patientNic?: string;
+        reference?: string;
+        vendor?: string;
+    }) => Promise<boolean>;
     updateItem: (index: number, name: string, price: number) => void;
     clearSession: () => void;
     commitSession: (
@@ -93,10 +102,10 @@ export const TreatmentProvider = ({ children }: { children: ReactNode }) => {
     const { toast } = useToast();
 
     // Validate employee and set cycle info
-    const setEmployee = async (emp: Employee): Promise<boolean> => {
+    const setEmployee = useCallback(async (emp: { empNo?: string; id?: string; name?: string }): Promise<boolean> => {
         try {
             const visitDate = new Date().toISOString().split('T')[0];
-            const validation = await sqlApi.treatment.validateCycle(emp.empNo, visitDate);
+            const validation = await sqlApi.treatment.validateCycle(emp.empNo, visitDate, emp.id);
 
             if (!validation.allowed && !validation.valid) {
                 toast({
@@ -113,27 +122,32 @@ export const TreatmentProvider = ({ children }: { children: ReactNode }) => {
             setSession(prev => ({
                 ...prev,
                 employee: {
-                    ...emp,
-                    ...validatedEmp, // Merge fetched details (Name, ID, etc)
+                    id: (validatedEmp.id || emp.id || '').toString(),
+                    empNo: (validatedEmp.empNo || emp.empNo || '').toString(),
+                    name: validatedEmp.name || emp.name || 'Patient',
                     cycleNo: validation.cycleNo,
                     allowMonth: validation.allowMonth,
-                    bookNo: validatedEmp.bookNo || emp.bookNo || prev.bookNo,
-                    patientType: validatedEmp.patientType || emp.patientType || prev.patientType,
-                    patientNic: validatedEmp.patientNic || emp.patientNic || prev.patientNic,
-                    reference: emp.reference || prev.reference,
-                    vendor: emp.vendor || prev.vendor,
-                    store: emp.store || prev.store,
-                    invoiceNo: emp.invoiceNo || prev.invoiceNo,
-                    description: emp.description || prev.description,
-                    medicineAmount: emp.medicineAmount || prev.medicineAmount,
+                    bookNo: validatedEmp.bookNo || '',
+                    patientType: validatedEmp.patientType || 'Self',
+                    patientNic: validatedEmp.patientNic || '',
                 },
                 allowMonth: validation.allowMonth,
+                bookNo: validatedEmp.bookNo || '',
+                patientType: validatedEmp.patientType || 'Self',
+                patientNic: validatedEmp.patientNic || '',
             }));
 
-            toast({
-                title: 'Employee Validated',
-                description: `Cycle ${validation.cycleNo} of ${validation.allowMonth}`,
-            });
+            if (validation.employee) {
+                toast({
+                    title: 'Employee Found',
+                    description: `${validatedEmp.name} (Cycle ${validation.cycleNo})`,
+                });
+            } else {
+                toast({
+                    title: 'New Record',
+                    description: `Valid for Cycle ${validation.cycleNo}`,
+                });
+            }
 
             return true;
         } catch (error: any) {
@@ -144,18 +158,18 @@ export const TreatmentProvider = ({ children }: { children: ReactNode }) => {
             });
             return false;
         }
-    };
+    }, [toast]);
 
-    const updateItem = (index: number, name: string, price: number) => {
+    const updateItem = useCallback((index: number, name: string, price: number) => {
         if (index < 0 || index >= 10) return;
         setSession(prev => {
             const newItems = [...prev.items];
             newItems[index] = { name, price };
             return { ...prev, items: newItems };
         });
-    };
+    }, []);
 
-    const clearSession = () => {
+    const clearSession = useCallback(() => {
         setSession({
             employee: null,
             items: Array(10).fill(null).map(() => ({ name: '', price: 0 })),
@@ -175,77 +189,79 @@ export const TreatmentProvider = ({ children }: { children: ReactNode }) => {
             medicineAmount: 0,
             treatmentType: 'Medicine',
         });
-    };
+    }, []);
 
-    const goToDetailsStep = () => {
-        if (!session.employee) {
-            toast({
-                title: 'Error',
-                description: 'Please enter employee details first',
-                variant: 'destructive',
-            });
-            return;
-        }
-        setSession(prev => ({ ...prev, currentStep: 'details' }));
-    };
+    const goToDetailsStep = useCallback(() => {
+        setSession(prev => {
+            if (!prev.employee) {
+                toast({
+                    title: 'Error',
+                    description: 'Please enter employee details first',
+                    variant: 'destructive',
+                });
+                return prev;
+            }
+            return { ...prev, currentStep: 'details' };
+        });
+    }, [toast]);
 
-    const goBackToEmployee = () => {
+    const goBackToEmployee = useCallback(() => {
         setSession(prev => ({ ...prev, currentStep: 'employee' }));
-    };
+    }, []);
 
-    const setLabName = (name: string) => {
+    const setLabName = useCallback((name: string) => {
         setSession(prev => ({ ...prev, labName: name }));
-    };
+    }, []);
 
-    const setHospitalName = (name: string) => {
+    const setHospitalName = useCallback((name: string) => {
         setSession(prev => ({ ...prev, hospitalName: name }));
-    };
+    }, []);
 
-    const setHospitalType = (type: 'OPD' | 'IPD') => {
+    const setHospitalType = useCallback((type: 'OPD' | 'IPD') => {
         setSession(prev => ({ ...prev, hospitalType: type }));
-    };
+    }, []);
 
-    const setBookNo = (bookNo: string) => {
+    const setBookNo = useCallback((bookNo: string) => {
         setSession(prev => ({ ...prev, bookNo }));
-    };
+    }, []);
 
-    const setPatientType = (type: string) => {
+    const setPatientType = useCallback((type: string) => {
         setSession(prev => ({ ...prev, patientType: type }));
-    };
+    }, []);
 
-    const setPatientNic = (nic: string) => {
+    const setPatientNic = useCallback((nic: string) => {
         setSession(prev => ({ ...prev, patientNic: nic }));
-    };
+    }, []);
 
-    const setReference = (ref: string) => {
+    const setReference = useCallback((ref: string) => {
         setSession(prev => ({ ...prev, reference: ref }));
-    };
+    }, []);
 
-    const setVendor = (vendor: string) => {
+    const setVendor = useCallback((vendor: string) => {
         setSession(prev => ({ ...prev, vendor: vendor }));
-    };
+    }, []);
 
-    const setStore = (store: string) => {
+    const setStore = useCallback((store: string) => {
         setSession(prev => ({ ...prev, store }));
-    };
+    }, []);
 
-    const setInvoiceNo = (no: string) => {
+    const setInvoiceNo = useCallback((no: string) => {
         setSession(prev => ({ ...prev, invoiceNo: no }));
-    };
+    }, []);
 
-    const setDescription = (desc: string) => {
+    const setDescription = useCallback((desc: string) => {
         setSession(prev => ({ ...prev, description: desc }));
-    };
+    }, []);
 
-    const setMedicineAmount = (amount: number) => {
+    const setMedicineAmount = useCallback((amount: number) => {
         setSession(prev => ({ ...prev, medicineAmount: amount }));
-    };
+    }, []);
 
-    const setTreatmentType = (type: string) => {
+    const setTreatmentType = useCallback((type: string) => {
         setSession(prev => ({ ...prev, treatmentType: type }));
-    };
+    }, []);
 
-    const commitSession = async (
+    const commitSession = useCallback(async (
         treatmentType: 'Medicine' | 'Lab' | 'Hospital' | 'NoteSheet',
         additionalData?: { labName?: string; hospitalName?: string; hospitalType?: 'OPD' | 'IPD' }
     ) => {
@@ -315,49 +331,85 @@ export const TreatmentProvider = ({ children }: { children: ReactNode }) => {
             });
             return { success: false, error: error.message };
         }
-    };
+    }, [session.employee, session.items, session.bookNo, session.patientType, session.patientNic, session.reference, session.vendor, session.store, session.invoiceNo, session.description, session.medicineAmount, session.labName, session.hospitalName, session.hospitalType, toast]);
+
+    const contextValue = useMemo(() => ({
+        employee: session.employee,
+        items: session.items,
+        currentStep: session.currentStep,
+        qrCode: session.qrCode,
+        labName: session.labName,
+        hospitalName: session.hospitalName,
+        hospitalType: session.hospitalType,
+        bookNo: session.bookNo,
+        patientType: session.patientType,
+        patientNic: session.patientNic,
+        reference: session.reference,
+        vendor: session.vendor,
+        store: session.store,
+        invoiceNo: session.invoiceNo,
+        description: session.description,
+        allowMonth: session.employee?.allowMonth,
+        setEmployee,
+        updateItem,
+        clearSession,
+        commitSession,
+        goToDetailsStep,
+        goBackToEmployee,
+        setLabName,
+        setHospitalName,
+        setHospitalType,
+        setBookNo,
+        setPatientType,
+        setPatientNic,
+        setReference,
+        setVendor,
+        setStore,
+        setInvoiceNo,
+        setDescription,
+        setMedicineAmount,
+        setTreatmentType,
+        treatmentType: session.treatmentType
+    }), [
+        session.employee,
+        session.items,
+        session.currentStep,
+        session.qrCode,
+        session.labName,
+        session.hospitalName,
+        session.hospitalType,
+        session.bookNo,
+        session.patientType,
+        session.patientNic,
+        session.reference,
+        session.vendor,
+        session.store,
+        session.invoiceNo,
+        session.description,
+        session.treatmentType,
+        setEmployee,
+        updateItem,
+        clearSession,
+        commitSession,
+        goToDetailsStep,
+        goBackToEmployee,
+        setLabName,
+        setHospitalName,
+        setHospitalType,
+        setBookNo,
+        setPatientType,
+        setPatientNic,
+        setReference,
+        setVendor,
+        setStore,
+        setInvoiceNo,
+        setDescription,
+        setMedicineAmount,
+        setTreatmentType
+    ]);
 
     return (
-        <TreatmentContext.Provider
-            value={{
-                employee: session.employee,
-                items: session.items,
-                currentStep: session.currentStep,
-                qrCode: session.qrCode,
-                labName: session.labName,
-                hospitalName: session.hospitalName,
-                hospitalType: session.hospitalType,
-                bookNo: session.bookNo,
-                patientType: session.patientType,
-                patientNic: session.patientNic,
-                reference: session.reference,
-                vendor: session.vendor,
-                store: session.store,
-                invoiceNo: session.invoiceNo,
-                description: session.description,
-                allowMonth: session.employee?.allowMonth,
-                setEmployee,
-                updateItem,
-                clearSession,
-                commitSession,
-                goToDetailsStep,
-                goBackToEmployee,
-                setLabName,
-                setHospitalName,
-                setHospitalType,
-                setBookNo,
-                setPatientType,
-                setPatientNic,
-                setReference,
-                setVendor,
-                setStore,
-                setInvoiceNo,
-                setDescription,
-                setMedicineAmount,
-                setTreatmentType,
-                treatmentType: session.treatmentType
-            }}
-        >
+        <TreatmentContext.Provider value={contextValue}>
             {children}
         </TreatmentContext.Provider>
     );

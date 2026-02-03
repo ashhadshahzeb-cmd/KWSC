@@ -4,7 +4,7 @@ import { sqlApi } from '@/lib/api';
 import MedicalCard from '@/components/profile/MedicalCard';
 import FamilyMemberCard from '@/components/profile/FamilyMemberCard';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Loader2, CreditCard, Info, AlertTriangle, RotateCcw } from 'lucide-react';
+import { Loader2, CreditCard, Info, AlertTriangle, RotateCcw, History, Printer } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import ManageCardDialog from '@/components/admin/ManageCardDialog';
 import { Button } from '@/components/ui/button';
@@ -42,12 +42,16 @@ const VirtualCard = () => {
             if (data) {
                 // Fetch family info using same API base
                 try {
-                    const API_BASE = import.meta.env.PROD
-                        ? '/api'
-                        : (import.meta.env.VITE_API_URL || 'http://localhost:5000/api');
-                    const familyRes = await fetch(`${API_BASE}/family/${user.id}`);
+                    const API_BASE = (import.meta.env.VITE_API_BASE_URL ? `${import.meta.env.VITE_API_BASE_URL}/api` : undefined) || (import.meta.env.PROD ? '/api' : 'http://localhost:5000/api');
+                    const familyRes = await fetch(`${API_BASE}/family/${user.id}`, {
+                        headers: {
+                            'ngrok-skip-browser-warning': 'true'
+                        }
+                    });
                     const familyData = await familyRes.json();
-                    setCardData({ ...data, family_members: familyData || [] });
+                    const fullCardData = { ...data, family_members: familyData || [] };
+                    console.log('[VirtualCard] Full Card Data with Family:', fullCardData);
+                    setCardData(fullCardData);
                 } catch (familyErr) {
                     console.log('[VirtualCard] Family fetch failed, showing card without family:', familyErr);
                     setCardData(data);
@@ -74,8 +78,8 @@ const VirtualCard = () => {
     }
 
     return (
-        <div className="container mx-auto py-8 max-w-4xl space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div className="container mx-auto py-8 max-w-4xl space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 print:p-0 print:m-0 print:max-w-none print:w-full">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 print:hidden">
                 <div>
                     <h1 className="text-3xl font-bold tracking-tight">Virtual Medical Card</h1>
                     <p className="text-muted-foreground mt-1">Access your digital membership and benefits anytime.</p>
@@ -83,12 +87,21 @@ const VirtualCard = () => {
                 <Badge variant="secondary" className="px-4 py-1.5 h-fit text-xs font-semibold uppercase tracking-widest border-primary/20 bg-primary/5 text-primary">
                     Authorized Member
                 </Badge>
+                <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => window.print()}
+                    className="gap-2 print:hidden"
+                >
+                    <Printer className="w-4 h-4" />
+                    Print Card
+                </Button>
                 {(user as any)?.role === 'admin' && cardData && (
                     <Button
                         variant="outline"
                         size="sm"
                         onClick={() => setShowManageDialog(true)}
-                        className="gap-2"
+                        className="gap-2 print:hidden"
                     >
                         <CreditCard className="w-4 h-4" />
                         Edit My Card
@@ -98,18 +111,18 @@ const VirtualCard = () => {
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
                 {/* Card Display Section */}
-                <div className="lg:col-span-12 xl:col-span-7 flex flex-col items-center justify-center gap-6">
+                <div className="lg:col-span-12 xl:col-span-7 flex flex-col items-center justify-center gap-6 print:block print:col-span-12">
                     {cardData ? (
                         <>
                             {/* Main Employee Card */}
                             <div className="w-full">
-                                <p className="text-xs text-muted-foreground uppercase tracking-widest mb-2 text-center">Your Card</p>
+                                <p className="text-xs text-muted-foreground uppercase tracking-widest mb-2 text-center print:hidden">Your Card</p>
                                 <MedicalCard data={cardData} />
                             </div>
 
                             {/* Family Member Cards */}
                             {cardData.family_members && cardData.family_members.length > 0 && (
-                                <div className="w-full space-y-3">
+                                <div className="w-full space-y-3 print:hidden">
                                     <p className="text-xs text-muted-foreground uppercase tracking-widest text-center">Family Member Cards</p>
                                     <div className="flex gap-4 overflow-x-auto pb-4 px-2 snap-x snap-mandatory scrollbar-thin scrollbar-thumb-primary/20 scrollbar-track-transparent">
                                         {cardData.family_members.map((member: any) => (
@@ -123,13 +136,45 @@ const VirtualCard = () => {
                                 </div>
                             )}
 
-                            <div className="flex items-center gap-3 px-4 py-2 bg-muted/50 rounded-full border border-border/50">
+                            <div className="flex items-center gap-3 px-4 py-2 bg-muted/50 rounded-full border border-border/50 print:hidden">
                                 <Info className="w-4 h-4 text-primary" />
                                 <p className="text-xs font-medium text-muted-foreground">Click any card to view benefits on the back.</p>
                             </div>
+
+                            {/* Recent Transactions */}
+                            {cardData.transactions && cardData.transactions.length > 0 && (
+                                <div className="w-full mt-4 animate-in slide-in-from-bottom-4 duration-700 delay-300 print:hidden">
+                                    <h3 className="text-sm font-bold tracking-widest uppercase text-muted-foreground mb-3 flex items-center gap-2">
+                                        <div className="p-1 bg-primary/10 rounded">
+                                            <History className="w-3 h-3 text-primary" />
+                                        </div>
+                                        Recent Activity
+                                    </h3>
+                                    <Card className="glass-card border-primary/10 overflow-hidden">
+                                        <div className="divide-y divide-border/50">
+                                            {cardData.transactions.map((tx: any) => (
+                                                <div key={tx.serial_no} className="p-3 flex justify-between items-center hover:bg-muted/30 transition-colors group">
+                                                    <div className="space-y-0.5">
+                                                        <p className="font-semibold text-sm group-hover:text-primary transition-colors">{tx.hospital_name || 'Medical Service'}</p>
+                                                        <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                                                            <span>{new Date(tx.visit_date).toLocaleDateString()}</span>
+                                                            <span className="w-1 h-1 rounded-full bg-border" />
+                                                            <span className="uppercase tracking-wider">{tx.treatment || 'Checkup'}</span>
+                                                        </div>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <p className="font-bold text-sm text-destructive">- Rs. {Number(tx.medicine_amount).toLocaleString()}</p>
+                                                        {tx.description && <p className="text-[10px] text-muted-foreground max-w-[120px] truncate opacity-0 group-hover:opacity-100 transition-opacity">{tx.description}</p>}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </Card>
+                                </div>
+                            )}
                         </>
                     ) : (
-                        <Card className="w-full max-w-md aspect-[1.6/1] flex flex-col items-center justify-center border-dashed border-2 p-8 text-center bg-muted/10">
+                        <Card className="w-full max-w-md aspect-[1.6/1] flex flex-col items-center justify-center border-dashed border-2 p-8 text-center bg-muted/10 print:hidden">
                             <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
                                 <CreditCard className="w-8 h-8 text-muted-foreground/40" />
                             </div>
@@ -167,7 +212,7 @@ const VirtualCard = () => {
                 </div>
 
                 {/* Info Section */}
-                <div className="lg:col-span-12 xl:col-span-5 space-y-6">
+                <div className="lg:col-span-12 xl:col-span-5 space-y-6 print:hidden">
                     <Card className="glass-card border-primary/10">
                         <CardHeader>
                             <CardTitle className="text-lg flex items-center gap-2">

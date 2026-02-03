@@ -1,8 +1,6 @@
 // API Client for SQL Server Backend
 // API Client for SQL Server Backend
-const API_BASE = import.meta.env.PROD
-    ? '/api'
-    : (import.meta.env.VITE_API_URL || 'http://localhost:5000/api');
+const API_BASE = (import.meta.env.VITE_API_BASE_URL ? `${import.meta.env.VITE_API_BASE_URL}/api` : undefined) || '/api';
 
 // Helper function for API calls
 export async function apiCall(endpoint: string, options: RequestInit = {}) {
@@ -10,6 +8,7 @@ export async function apiCall(endpoint: string, options: RequestInit = {}) {
     const response = await fetch(`${API_BASE}${endpoint}`, {
         headers: {
             'Content-Type': 'application/json',
+            'ngrok-skip-browser-warning': 'true',
             ...options.headers,
         },
         ...options,
@@ -163,10 +162,10 @@ export interface TreatmentRecord {
 }
 
 export const treatmentApi = {
-    validateCycle: async (empNo: string, visitDate: string) => {
+    validateCycle: async (empNo?: string, visitDate?: string, id?: string) => {
         return apiCall('/treatment/validate-cycle', {
             method: 'POST',
-            body: JSON.stringify({ empNo, visitDate }),
+            body: JSON.stringify({ empNo, visitDate, id }),
         });
     },
 

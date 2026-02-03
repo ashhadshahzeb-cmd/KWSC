@@ -157,7 +157,7 @@ const Dashboard = () => {
               transition={{ delay: 0.2 }}
             >
               <Sparkles className="w-4 h-4 text-warning" />
-              <span className="text-xs font-bold uppercase tracking-[0.2em]">HealFlow Overview</span>
+              <span className="text-xs font-bold uppercase tracking-[0.2em]">KWSC Overview</span>
             </motion.div>
 
             <div className="space-y-2">

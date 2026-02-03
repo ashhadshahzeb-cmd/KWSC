@@ -1,5 +1,6 @@
-// HealFlow Backend Server - SQL Server Version
+// KWSC Backend Server - SQL Server Version
 const express = require('express');
+const nodemailer = require('nodemailer');
 const cors = require('cors');
 const { v4: uuidv4 } = require('uuid');
 const QRCode = require('qrcode');
@@ -7,6 +8,15 @@ const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '.env') });
 
 const { pool } = require('./db');
+
+// Email Transporter (For OTP)
+const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+        user: process.env.EMAIL_USER || '', // e.g. your-email@gmail.com
+        pass: process.env.EMAIL_PASS || ''  // e.g. your-app-password
+    }
+});
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -27,7 +37,7 @@ app.use((req, res, next) => {
 
 // Root route for status check
 app.get('/', (req, res) => {
-    res.json({ message: 'HealFlow API is running', env: process.env.NODE_ENV });
+    res.json({ message: 'KWSC API is running', env: process.env.NODE_ENV });
 });
 
 // Standalone ping for quick verification
@@ -87,11 +97,76 @@ app.delete('/api/notifications', async (req, res) => {
     }
 });
 
+// List Laboratory Tests
+app.get('/api/lab/tests', async (req, res) => {
+    try {
+        // Collect distinct tests from all Medicine columns (1-10) for Lab treatments
+        const queries = [];
+        for (let i = 1; i <= 10; i++) {
+            queries.push(`SELECT DISTINCT "Medicine${i}" as test FROM treatment2 WHERE "Treatment" = 'Lab' AND "Medicine${i}" IS NOT NULL AND "Medicine${i}" != ''`);
+        }
+
+        const fullQuery = queries.join(' UNION ') + ' ORDER BY test';
+
+        const result = await pool.query(fullQuery);
+        // Return simple array of strings
+        res.json(result.rows.map(r => r.test));
+    } catch (err) {
+        console.error('Error fetching lab tests:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 app.get('/api/users/:id/card', async (req, res) => {
     try {
         const result = await pool.query('SELECT * FROM medical_cards WHERE user_id = $1', [req.params.id]);
-        res.json(result.rows[0] || null);
+        const card = result.rows[0];
+
+        if (!card) {
+            return res.json(null);
+        }
+
+        let spentAmount = 0;
+        let recentTransactions = [];
+
+        // If card exists, fetch transactions based on emp_no
+        if (card.emp_no) {
+            console.log(`[MEDICAL_CARD] Fetching history for EmpNo: ${card.emp_no}`);
+
+            // Calculate total spent amount
+            const spentResult = await pool.query(
+                'SELECT SUM(medicine_amount) as total FROM treatment2 WHERE emp_no = $1',
+                [card.emp_no]
+            );
+            spentAmount = parseFloat(spentResult.rows[0].total || 0);
+            console.log(`[MEDICAL_CARD] Total spent: ${spentAmount}`);
+
+            // Fetch recent transactions (last 20)
+            const transactionsResult = await pool.query(`
+                SELECT serial_no, visit_date, hospital_name, medicine_amount, description, treatment
+                FROM treatment2
+                WHERE emp_no = $1
+                ORDER BY visit_date DESC
+                LIMIT 20
+            `, [card.emp_no]);
+            recentTransactions = transactionsResult.rows;
+            console.log(`[MEDICAL_CARD] Found ${recentTransactions.length} transactions.`);
+        }
+
+        // Calculate remaining balance
+        const totalLimit = parseFloat(card.total_limit || 100000);
+        const remainingBalance = totalLimit - spentAmount;
+
+        res.json({
+            ...card,
+            total_limit: totalLimit,
+            spent_amount: spentAmount,
+            remaining_balance: remainingBalance,
+            transactions: recentTransactions
+        });
+
     } catch (err) {
+        console.error('[MEDICAL_CARD_GET_ERROR]', err);
         res.status(500).json({ error: err.message });
     }
 });
@@ -100,7 +175,7 @@ app.post('/api/users/:id/card', async (req, res) => {
     const { id } = req.params;
     const {
         card_no, participant_name, emp_no, cnic, customer_no, dob, valid_upto, branch,
-        benefit_covered, hospitalization, room_limit, normal_delivery, c_section_limit
+        benefit_covered, hospitalization, room_limit, normal_delivery, c_section_limit, total_limit
     } = req.body;
 
     try {
@@ -115,8 +190,8 @@ app.post('/api/users/:id/card', async (req, res) => {
         const query = `
             INSERT INTO medical_cards (
                 user_id, card_no, participant_name, emp_no, cnic, customer_no, dob, valid_upto, branch,
-                benefit_covered, hospitalization, room_limit, normal_delivery, c_section_limit
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+                benefit_covered, hospitalization, room_limit, normal_delivery, c_section_limit, total_limit
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
             ON CONFLICT (user_id) DO UPDATE SET
                 card_no = EXCLUDED.card_no,
                 participant_name = EXCLUDED.participant_name,
@@ -130,7 +205,8 @@ app.post('/api/users/:id/card', async (req, res) => {
                 hospitalization = EXCLUDED.hospitalization,
                 room_limit = EXCLUDED.room_limit,
                 normal_delivery = EXCLUDED.normal_delivery,
-                c_section_limit = EXCLUDED.c_section_limit
+                c_section_limit = EXCLUDED.c_section_limit,
+                total_limit = EXCLUDED.total_limit
             RETURNING *
         `;
 
@@ -148,7 +224,8 @@ app.post('/api/users/:id/card', async (req, res) => {
             hospitalization || null,
             room_limit || null,
             normal_delivery || null,
-            c_section_limit || null
+            c_section_limit || null,
+            total_limit || 100000
         ];
 
         const result = await pool.query(query, params);
@@ -340,9 +417,84 @@ app.post('/api/setup/init-db', async (req, res) => {
 // AUTHENTICATION ENDPOINTS
 // ============================================================================
 
-app.post('/api/auth/signup', async (req, res) => {
-    const { email, password, fullName, empNo } = req.body;
+app.post('/api/auth/send-otp', async (req, res) => {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: 'Email is required' });
+
     try {
+        const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+        const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 mins
+
+        await pool.query(
+            'INSERT INTO otp_verifications (email, code, expires_at) VALUES ($1, $2, $3)',
+            [email, otpCode, expiresAt]
+        );
+
+        // Send Email
+        if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+            const mailOptions = {
+                from: process.env.EMAIL_USER,
+                to: email,
+                subject: 'KWSC Signup OTP',
+                text: `Your OTP for KWSC signup is: ${otpCode}. It will expire in 10 minutes.`,
+                html: `<div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #eee; border-radius: 5px;">
+                        <h2 style="color: #2563eb;">KWSC Verification</h2>
+                        <p>Hello,</p>
+                        <p>Your verification code for KWSC signup is:</p>
+                        <div style="font-size: 32px; font-weight: bold; letter-spacing: 5px; color: #2563eb; margin: 20px 0;">${otpCode}</div>
+                        <p>This code will expire in 10 minutes.</p>
+                        <p>If you did not request this, please ignore this email.</p>
+                      </div>`
+            };
+            await transporter.sendMail(mailOptions);
+            res.json({ success: true, message: 'OTP sent to your email' });
+        } else {
+            // Simulator Fallback
+            console.log(`\n--- [SIMULATED EMAIL] ---`);
+            console.log(`To: ${email}`);
+            console.log(`OTP Code: ${otpCode}`);
+            console.log(`--------------------------\n`);
+            res.json({ success: true, message: 'OTP simulated (Check server console) - Please set EMAIL_USER/PASS in .env for real emails' });
+        }
+    } catch (err) {
+        console.error('Email Error:', err);
+        res.status(500).json({ error: 'Failed to send OTP email' });
+    }
+});
+
+app.post('/api/auth/verify-otp', async (req, res) => {
+    const { email, code } = req.body;
+    try {
+        const result = await pool.query(
+            'SELECT * FROM otp_verifications WHERE email = $1 AND code = $2 AND expires_at > NOW() AND verified = FALSE ORDER BY created_at DESC LIMIT 1',
+            [email, code]
+        );
+
+        if (result.rows.length > 0) {
+            const otpId = result.rows[0].id;
+            await pool.query('UPDATE otp_verifications SET verified = TRUE WHERE id = $1', [otpId]);
+            res.json({ success: true, message: 'OTP verified successfully' });
+        } else {
+            res.status(400).json({ error: 'Invalid or expired OTP' });
+        }
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/auth/signup', async (req, res) => {
+    const { email, password, fullName, empNo, otpCode } = req.body;
+    try {
+        // Verify OTP logic
+        const otpCheck = await pool.query(
+            'SELECT * FROM otp_verifications WHERE email = $1 AND code = $2 AND verified = TRUE ORDER BY created_at DESC LIMIT 1',
+            [email, otpCode]
+        );
+
+        if (otpCheck.rows.length === 0) {
+            return res.status(400).json({ error: 'Email not verified or OTP expired' });
+        }
+
         const result = await pool.query(
             'INSERT INTO users (email, password, full_name, emp_no, role) VALUES ($1, $2, $3, $4, $5) RETURNING *',
             [email, password, fullName, empNo, 'user']
@@ -392,14 +544,14 @@ app.post('/api/auth/login', async (req, res) => {
             });
         } else {
             // Fallback for initial admin if no users exist
-            if (email === 'admin@healflow.com' && password === 'Admin') {
+            if (email === 'admin@kwsc.com' && password === 'Admin') {
                 // Ensure admin exists in DB
                 const checkAdmin = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
                 let adminUser;
                 if (checkAdmin.rows.length === 0) {
                     const insertAdmin = await pool.query(
                         'INSERT INTO users (email, password, full_name, role) VALUES ($1, $2, $3, $4) RETURNING *',
-                        [email, 'Admin', 'HealFlow Admin', 'admin']
+                        [email, 'Admin', 'KWSC Admin', 'admin']
                     );
                     adminUser = insertAdmin.rows[0];
                 } else {
@@ -459,7 +611,7 @@ app.patch('/api/users/:id/role', async (req, res) => {
 
 // Validate Employee Cycle & Fetch Details
 app.post('/api/treatment/validate-cycle', async (req, res) => {
-    const { empNo, visitDate } = req.body;
+    const { empNo, id, visitDate } = req.body;
 
     try {
         const date = new Date(visitDate || new Date());
@@ -469,8 +621,32 @@ app.post('/api/treatment/validate-cycle', async (req, res) => {
         const allowMonth = `${monthNames[date.getMonth()]}-${date.getFullYear()}`;
 
         // Fetch additional details from Registration table
-        const result = await pool.query('SELECT * FROM Registration WHERE Emp_no = $1', [empNo]);
+        let result;
+        if (id) {
+            result = await pool.query('SELECT * FROM Registration WHERE Id = $1', [id]);
+        } else if (empNo) {
+            // First try searching by Emp_no
+            result = await pool.query('SELECT * FROM Registration WHERE Emp_no = $1', [empNo]);
+
+            // Fallback: If not found and input is numeric, try searching by ID
+            if (result.rows.length === 0 && empNo && !isNaN(empNo)) {
+                result = await pool.query('SELECT * FROM Registration WHERE Id = $1', [parseInt(empNo)]);
+            }
+        } else {
+            return res.status(400).json({ error: 'Either Employee No or ID is required' });
+        }
+
         const employeeDetails = result.rows[0] || null;
+        console.log(`[VALIDATE CYCLE] Found employee:`, employeeDetails);
+
+        // Fetch Medical Card if exists
+        let medicalCard = null;
+        if (employeeDetails && employeeDetails.emp_no) {
+            const cardRes = await pool.query('SELECT card_no FROM medical_cards WHERE emp_no = $1', [employeeDetails.emp_no]);
+            if (cardRes.rows.length > 0) {
+                medicalCard = cardRes.rows[0];
+            }
+        }
 
         res.json({
             allowed: true,
@@ -478,14 +654,16 @@ app.post('/api/treatment/validate-cycle', async (req, res) => {
             cycleNo,
             allowMonth,
             employee: employeeDetails ? {
-                empNo: employeeDetails.Emp_no,
-                name: employeeDetails.Emp_name,
-                bookNo: employeeDetails.Book_no,
-                patientNic: employeeDetails.Patient_nic,
-                patientType: employeeDetails.Patient_type,
+                id: employeeDetails.id ? employeeDetails.id.toString() : '',
+                empNo: employeeDetails.emp_no || '',
+                name: employeeDetails.emp_name || 'Patient',
+                bookNo: employeeDetails.book_no || '',
+                patientNic: employeeDetails.patient_nic || '',
+                patientType: employeeDetails.patient_type || 'Self',
+                cardNo: medicalCard ? medicalCard.card_no : '',
             } : null,
             message: employeeDetails
-                ? `Employee ${employeeDetails.Emp_name} validated for Cycle ${cycleNo} of ${allowMonth}`
+                ? `Employee ${employeeDetails.emp_name} validated for Cycle ${cycleNo} of ${allowMonth}`
                 : `Employee ${empNo} validated (New Record) for Cycle ${cycleNo} of ${allowMonth}`
         });
     } catch (err) {
@@ -662,15 +840,15 @@ app.get('/api/patients', async (req, res) => {
     try {
         const result = await pool.query('SELECT * FROM Registration ORDER BY Id DESC LIMIT 100');
         res.json(result.rows.map(row => ({
-            id: row.Id.toString(),
-            empNo: row.Emp_no,
-            name: row.Emp_name,
-            bookNo: row.Book_no,
-            cnic: row.Patient_nic,
-            phone: row.Phone,
-            patientType: row.Patient_type,
-            rfid_tag: row.RFID_Tag,
-            custom_fields: row.Custom_fields
+            id: row.id.toString(),
+            empNo: row.emp_no,
+            name: row.emp_name,
+            bookNo: row.book_no,
+            cnic: row.patient_nic,
+            phone: row.phone,
+            patientType: row.patient_type,
+            rfid_tag: row.rfid_tag,
+            custom_fields: row.custom_fields
         })));
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -715,15 +893,15 @@ app.get('/api/patients/:id', async (req, res) => {
         }
         const row = result.rows[0];
         res.json({
-            id: row.Id.toString(),
-            empNo: row.Emp_no,
-            name: row.Emp_name,
-            bookNo: row.Book_no,
-            cnic: row.Patient_nic,
-            phone: row.Phone,
-            patientType: row.Patient_type,
-            rfid_tag: row.RFID_Tag,
-            custom_fields: row.Custom_fields
+            id: row.id.toString(),
+            empNo: row.emp_no,
+            name: row.emp_name,
+            bookNo: row.book_no,
+            cnic: row.patient_nic,
+            phone: row.phone,
+            patientType: row.patient_type,
+            rfid_tag: row.rfid_tag,
+            custom_fields: row.custom_fields
         });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -785,15 +963,15 @@ app.get('/api/patients/by-tag/:tag', async (req, res) => {
         }
         const row = result.rows[0];
         res.json({
-            id: row.Id.toString(),
-            empNo: row.Emp_no,
-            name: row.Emp_name,
-            bookNo: row.Book_no,
-            cnic: row.Patient_nic,
-            phone: row.Phone,
-            patientType: row.Patient_type,
-            rfid_tag: row.RFID_Tag,
-            custom_fields: row.Custom_fields
+            id: row.id.toString(),
+            empNo: row.emp_no,
+            name: row.emp_name,
+            bookNo: row.book_no,
+            cnic: row.patient_nic,
+            phone: row.phone,
+            patientType: row.patient_type,
+            rfid_tag: row.rfid_tag,
+            custom_fields: row.custom_fields
         });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -948,6 +1126,11 @@ const initSchema = async () => {
                 -- notifications additions
                 IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='notifications' AND column_name='metadata') THEN
                     ALTER TABLE notifications ADD COLUMN metadata JSONB DEFAULT '{}';
+                END IF;
+
+                -- medical_cards additions
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='medical_cards' AND column_name='total_limit') THEN
+                    ALTER TABLE medical_cards ADD COLUMN total_limit DECIMAL(12,2) DEFAULT 100000.00;
                 END IF;
             END $$;
         `;

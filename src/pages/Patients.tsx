@@ -25,6 +25,7 @@ interface Patient {
   visitDate: string;
   treatment: string;
   patientType: string;
+  cardNo?: string;
   rfid_tag?: string;
   custom_fields?: Record<string, string>;
 }
@@ -41,7 +42,22 @@ const Patients = () => {
 
   useEffect(() => {
     loadPatients();
+    loadLabTests();
   }, []);
+
+  const [labTests, setLabTests] = useState<string[]>([]);
+
+  const loadLabTests = async () => {
+    try {
+      const res = await fetch('http://localhost:5000/api/lab/tests');
+      if (res.ok) {
+        const data = await res.json();
+        setLabTests(data);
+      }
+    } catch (error) {
+      console.error("Failed to load lab tests", error);
+    }
+  };
 
   const loadPatients = async () => {
     try {
@@ -134,6 +150,39 @@ const Patients = () => {
       patient.bookNo.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const handleEmpNoBlur = async () => {
+    if (!formData.empNo) return;
+
+    try {
+      // Validate cycle returns employee details
+      const response = await sqlApi.treatment.validateCycle(formData.empNo);
+
+      if (response && response.employee) {
+        const { employee } = response;
+        setFormData(prev => ({
+          ...prev,
+          name: employee.name || "",
+          bookNo: employee.bookNo || "",
+          cnic: employee.patientNic || "",
+          // If phone is available in employee, use it, otherwise keep existing
+          // But usually we want to fetch fresh data. If phone isn't in validateCycle, we might need another call or update validateCycle.
+          // For now, let's assume validateCycle returns what we need or we map what we have.
+          // Note: validateCycle returns: id, empNo, name, bookNo, patientNic, patientType, cardNo
+          patientType: employee.patientType || "Self",
+          cardNo: employee.cardNo || "",
+        }));
+
+        toast({
+          title: "Employee Found",
+          description: `Loaded details for ${employee.name}`,
+        });
+      }
+    } catch (error) {
+      console.error("Auto-fill failed", error);
+      // Optional: don't toast error on blur to avoid annoyance if just clicking away
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -150,6 +199,7 @@ const Patients = () => {
         treatment: "",
         patientType: "Self",
         custom_fields: {},
+        cardNo: "",
       });
       setIsAddDialogOpen(false);
       toast({
@@ -235,6 +285,7 @@ const Patients = () => {
                       id="empNo"
                       value={formData.empNo}
                       onChange={(e) => setFormData({ ...formData, empNo: e.target.value })}
+                      onBlur={handleEmpNoBlur}
                       placeholder="EMP001"
                       required
                     />
@@ -267,6 +318,28 @@ const Patients = () => {
                       placeholder="35201-1234567-8"
                     />
                   </div>
+                  {(formData as any).cardNo && (
+                    <div className="space-y-2">
+                      <Label htmlFor="cardNo" className="text-sky-600 font-bold">Medical Card No</Label>
+                      <Input
+                        id="cardNo"
+                        value={(formData as any).cardNo}
+                        readOnly
+                        className="bg-sky-50 border-sky-200 text-sky-700 font-bold"
+                      />
+                    </div>
+                  )}
+                  {formData.cardNo && (
+                    <div className="space-y-2">
+                      <Label htmlFor="cardNo" className="text-sky-600 font-bold">Medical Card No</Label>
+                      <Input
+                        id="cardNo"
+                        value={formData.cardNo}
+                        readOnly
+                        className="bg-sky-50 border-sky-200 text-sky-700 font-bold"
+                      />
+                    </div>
+                  )}
                   <div className="space-y-2">
                     <Label htmlFor="phone">Phone</Label>
                     <Input
@@ -303,9 +376,31 @@ const Patients = () => {
                         <SelectItem value="Orthopedics">Orthopedics</SelectItem>
                         <SelectItem value="Dermatology">Dermatology</SelectItem>
                         <SelectItem value="Ophthalmology">Ophthalmology</SelectItem>
+                        <SelectItem value="Laboratory">Laboratory</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
+
+                  {formData.treatment === "Laboratory" && (
+                    <div className="space-y-2">
+                      <Label htmlFor="labTest">Lab Test *</Label>
+                      <Input
+                        id="labTest"
+                        list="lab-tests-list"
+                        value={formData.custom_fields?.['Lab Test'] || ""}
+                        onChange={(e) => setFormData({
+                          ...formData,
+                          custom_fields: { ...formData.custom_fields, 'Lab Test': e.target.value }
+                        })}
+                        placeholder="Select or type test name"
+                      />
+                      <datalist id="lab-tests-list">
+                        {labTests.map((test, i) => (
+                          <option key={i} value={test} />
+                        ))}
+                      </datalist>
+                    </div>
+                  )}
                   <div className="space-y-2">
                     <Label htmlFor="patientType">Patient Type *</Label>
                     <Select

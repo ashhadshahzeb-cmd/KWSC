@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, ArrowRight, Save, QrCode, Printer, Trash2, Edit, RotateCcw, Search } from "lucide-react";
@@ -58,6 +58,25 @@ const EmployeeEntry = () => {
             loadRecords();
         }
     }, [user]);
+
+    const lastSyncedId = useRef<string | null>(null);
+
+    // Sync local state when employee changes in context (Auto-fill)
+    useEffect(() => {
+        const syncKey = employee ? `${employee.id}-${employee.empNo}` : null;
+        if (employee && syncKey !== lastSyncedId.current) {
+            setEmpNo(employee.empNo || "");
+            setEmpName(employee.name || "");
+            setBookNo(employee.bookNo || "");
+            setPatientNic(employee.patientNic || "");
+            setPatientType(employee.patientType || "Self");
+            setReference(employee.reference || "");
+            setVendor(employee.vendor || "");
+            lastSyncedId.current = syncKey;
+        } else if (!employee) {
+            lastSyncedId.current = null;
+        }
+    }, [employee, setBookNo, setPatientNic, setPatientType, setReference, setVendor]);
 
     useEffect(() => {
         if (treatmentType) {

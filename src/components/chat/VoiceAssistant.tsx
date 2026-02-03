@@ -10,9 +10,10 @@ import { useAuth } from '@/contexts/AuthContext'; // Added import for useAuth
 const VoiceAssistant = () => {
     const { user } = useAuth(); // Added useAuth hook
     const [isListening, setIsListening] = useState(false);
+    const [isThinking, setIsThinking] = useState(false);
     const [transcript, setTranscript] = useState('');
     const [lastAction, setLastAction] = useState<string | null>(null);
-    const [language, setLanguage] = useState<'en-US' | 'ur-PK' | 'hi-IN'>('en-US'); // Added language state
+    const [language, setLanguage] = useState<'en-US' | 'ur-PK' | 'hi-IN'>('en-US'); // Changed default to English
     const recognitionRef = useRef<any>(null);
     const hasGreeted = useRef(false); // Added hasGreeted ref
     const navigate = useNavigate();
@@ -31,16 +32,23 @@ const VoiceAssistant = () => {
 
         // Try to find a native voice for the target language
         const voices = window.speechSynthesis.getVoices();
-        const bestVoice = voices.find(v => v.lang.startsWith(targetLang.split('-')[0])) ||
-            voices.find(v => v.lang.includes('hi')) || // Fallback to Hindi for Urdu
-            voices.find(v => v.lang.includes('en'));
+
+        // Priority: 1. Google Urdu, 2. Google Hindi, 3. Any Urdu, 4. Any Hindi, 5. English
+        const bestVoice =
+            voices.find(v => v.name.includes('Google') && v.lang.includes('ur')) ||
+            voices.find(v => v.name.includes('Google') && v.lang.includes('hi')) ||
+            voices.find(v => v.lang.startsWith('ur')) ||
+            voices.find(v => v.lang.startsWith('hi')) ||
+            voices.find(v => v.name.includes('Google') && v.lang.includes('en')) ||
+            voices.find(v => v.lang.startsWith('en'));
 
         if (bestVoice) {
+            console.log('[VoiceAssistant] Selected Voice:', bestVoice.name, bestVoice.lang);
             utterance.voice = bestVoice;
         }
 
-        utterance.rate = 0.9; // Slightly slower for better clarity
-        utterance.pitch = 1;
+        utterance.rate = 1.0; // Normal rate
+        utterance.pitch = 1.1; // Slightly higher pitch for clarity
         window.speechSynthesis.speak(utterance);
     };
 
@@ -66,7 +74,7 @@ const VoiceAssistant = () => {
             else greeting = `Good evening ${name}`;
 
             setTimeout(() => {
-                speak(`${greeting}, I am HealFlow AI. How can I help you today?`);
+                speak(`${greeting}, I am KWSC AI. How can I help you today?`);
                 setLastAction(`Greeting: ${greeting}`);
                 hasGreeted.current = true;
             }, 1000);
@@ -75,29 +83,79 @@ const VoiceAssistant = () => {
 
     useEffect(() => {
         const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-        if (SpeechRecognition) {
-            const recognition = new SpeechRecognition();
-            recognition.continuous = true;
-            recognition.interimResults = true;
-            recognition.lang = language; // Changed to use language state
-
-            recognition.onresult = (event: any) => {
-                const current = event.results[event.results.length - 1];
-                const text = current[0].transcript.toLowerCase();
-                setTranscript(text);
-
-                if (current.isFinal) {
-                    processCommand(text);
-                }
-            };
-
-            recognition.onend = () => {
-                if (isListening) recognition.start();
-            };
-
-            recognitionRef.current = recognition;
+        if (!SpeechRecognition) {
+            console.error('Speech Recognition not supported in this browser');
+            return;
         }
-    }, [isListening, language]); // Added language to dependency array
+
+        const recognition = new SpeechRecognition();
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        recognition.lang = language;
+
+        recognition.onresult = (event: any) => {
+            const current = event.results[event.results.length - 1];
+            const text = current[0].transcript.toLowerCase();
+            setTranscript(text);
+
+            if (current.isFinal) {
+                setIsThinking(true);
+                // Artificial delay to make it feel like "Thinking"
+                setTimeout(() => {
+                    processCommand(text);
+                    setIsThinking(false);
+                }, 500);
+            }
+        };
+
+        recognition.onerror = (event: any) => {
+            console.error('Speech recognition error:', event.error);
+            if (event.error === 'not-allowed') {
+                toast({
+                    title: "Microphone Access Denied",
+                    description: "Please enable microphone access in your browser settings to use the AI Assistant.",
+                    variant: "destructive",
+                });
+                setIsListening(false);
+            } else if (event.error === 'network') {
+                toast({
+                    title: "Network Error",
+                    description: "Speech recognition requires an internet connection.",
+                    variant: "destructive",
+                });
+                setIsListening(false);
+            }
+        };
+
+        recognition.onend = () => {
+            // Only restart if we are still supposed to be listening
+            if (isListening) {
+                try {
+                    recognition.start();
+                } catch (e) {
+                    console.error('Failed to restart recognition:', e);
+                }
+            }
+        };
+
+        recognitionRef.current = recognition;
+
+        // Start/Stop based on state
+        if (isListening) {
+            try {
+                recognition.start();
+            } catch (e) {
+                console.error('Failed to start recognition:', e);
+            }
+        }
+
+        return () => {
+            recognition.onend = null; // Prevent restart loop on cleanup
+            try {
+                recognition.stop();
+            } catch (e) { }
+        };
+    }, [isListening, language]);
 
     const processCommand = (command: string) => {
         console.log('Voice Command:', command);
@@ -138,9 +196,9 @@ const VoiceAssistant = () => {
         }
 
         if (command.includes('who are you') || command.includes('tum kaun ho') || command.includes('کون ہو') || command.includes('کون ہیں')) {
-            const resp = language === 'ur-PK' ? 'Mein HealFlow AI Assistant hun, aap ka digital medical helper.' :
-                language === 'hi-IN' ? 'Mein HealFlow AI Assistant hun.' :
-                    "I am HealFlow AI, your dedicated medical assistant.";
+            const resp = language === 'ur-PK' ? 'Mein KWSC AI Assistant hun, aap ka digital medical helper.' :
+                language === 'hi-IN' ? 'Mein KWSC AI Assistant hun.' :
+                    "I am KWSC AI, your dedicated medical assistant.";
             speak(resp);
             executeAction(null, resp, <Cpu />);
             return;
@@ -155,10 +213,10 @@ const VoiceAssistant = () => {
 
         if (command.includes('project') || command.includes('is bare me') || command.includes('kya hai') || command.includes('about') || command.includes('پروجیکٹ') || command.includes('کے بارے میں') || command.includes('کیا ہے')) {
             const resp = language === 'ur-PK'
-                ? 'HealFlow aik advanced medical management system hai jo clinic aur hospital ke operations ko digitalize karta hai. Is mein OPD, Pharmacy, Lab aur NoteSheets ke modules shamil hain, aur ab is mein AI calling aur voice assistant bhi hai.'
+                ? 'KWSC aik advanced medical management system hai jo clinic aur hospital ke operations ko digitalize karta hai. Is mein OPD, Pharmacy, Lab aur NoteSheets ke modules shamil hain, aur ab is mein AI calling aur voice assistant bhi hai.'
                 : language === 'hi-IN'
-                    ? 'HealFlow ek advanced medical management system hai jo clinic aur hospital ke operations ko digitalize karta hai. Is mein OPD, Pharmacy, Lab aur NoteSheets ke modules shamil hain, aur ab is mein AI calling aur voice assistant bhi hai.'
-                    : "HealFlow is an advanced medical management system designed to digitalize clinic and hospital operations. It features modules for OPD, Pharmacy, Lab, and NoteSheets, now enhanced with AI calling and a voice assistant.";
+                    ? 'KWSC ek advanced medical management system hai jo clinic aur hospital ke operations ko digitalize karta hai. Is mein OPD, Pharmacy, Lab aur NoteSheets ke modules shamil hain, aur ab is mein AI calling aur voice assistant bhi hai.'
+                    : "KWSC is an advanced medical management system designed to digitalize clinic and hospital operations. It features modules for OPD, Pharmacy, Lab, and NoteSheets, now enhanced with AI calling and a voice assistant.";
             speak(resp);
             executeAction(null, resp, <Cpu />);
             return;
@@ -298,6 +356,8 @@ const VoiceAssistant = () => {
 
         // Fallback
         else {
+            const resp = language === 'ur-PK' ? 'Maaf kijie ga, mujhe samajh nahi aaya.' : "I didn't quite catch that. Could you repeat?";
+            speak(resp);
             setLastAction('Command not recognized');
             setTimeout(() => setLastAction(null), 3000);
         }
@@ -319,16 +379,11 @@ const VoiceAssistant = () => {
 
     const toggleListening = () => {
         if (isListening) {
-            recognitionRef.current?.stop();
             setIsListening(false);
             setTranscript('');
         } else {
-            recognitionRef.current?.start();
             setIsListening(true);
-            toast({
-                title: "AI Assistant Active",
-                description: "Listening for commands like 'Go to Medicine' or 'Search for EMP001'...",
-            });
+            setTranscript('');
         }
     };
 
@@ -345,7 +400,7 @@ const VoiceAssistant = () => {
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2 text-primary font-bold text-sm">
                                 <Cpu className="w-4 h-4 animate-pulse" />
-                                HealFlow AI
+                                KWSC AI
                             </div>
                             <div className="flex gap-1">
                                 <span className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce [animation-delay:-0.3s]"></span>
@@ -355,7 +410,14 @@ const VoiceAssistant = () => {
                         </div>
 
                         <div className="min-h-[40px] text-xs text-muted-foreground italic">
-                            {transcript || "Try: 'Open Medicine' or 'Clear form'"}
+                            {isThinking ? (
+                                <span className="text-primary font-medium flex items-center gap-2">
+                                    <Cpu className="w-3 h-3 animate-spin" />
+                                    Thinking...
+                                </span>
+                            ) : (
+                                transcript || (language === 'ur-PK' ? "Kuch bolein... jaise 'Medicine kholo'" : "Try: 'Open Medicine' or 'Clear form'")
+                            )}
                         </div>
 
                         {lastAction && (

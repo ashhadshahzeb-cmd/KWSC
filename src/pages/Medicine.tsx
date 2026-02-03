@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, RotateCcw, Save, Edit, Trash2, Printer, QrCode, ArrowRight, ArrowLeft, Activity } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -27,6 +27,7 @@ const Medicine = () => {
     store,
     invoiceNo,
     medicineAmount,
+    bookNo,
     setEmployee,
     updateItem,
     clearSession,
@@ -36,6 +37,7 @@ const Medicine = () => {
     setStore,
     setInvoiceNo,
     setMedicineAmount,
+    setBookNo,
   } = useTreatment();
 
   const { customFields } = useAuth();
@@ -53,6 +55,21 @@ const Medicine = () => {
     loadRecords();
   }, []);
 
+  const lastSyncedId = useRef<string | null>(null);
+
+  // Sync local state when employee changes in context (Auto-fill)
+  useEffect(() => {
+    const syncKey = employee ? `${employee.id}-${employee.empNo}` : null;
+    if (employee && syncKey !== lastSyncedId.current) {
+      if (employee.empNo) setEmpNo(employee.empNo);
+      if (employee.id) setSearchId(employee.id);
+      setBookNo(employee.bookNo || "");
+      lastSyncedId.current = syncKey;
+    } else if (!employee) {
+      lastSyncedId.current = null;
+    }
+  }, [employee, setBookNo]);
+
   const loadRecords = async () => {
     try {
       const data = await sqlApi.treatment.getRecords({ treatmentType: 'Medicine', limit: 50 });
@@ -62,8 +79,15 @@ const Medicine = () => {
     }
   };
 
+  const handleIdSearch = async () => {
+    if (!searchId) return;
+    setLoading(true);
+    await setEmployee({ id: searchId });
+    setLoading(false);
+  };
+
   useEffect(() => {
-    if (empNo.length >= 3 && !employee) {
+    if (empNo.length >= 4 && !employee) {
       handleValidate();
     } else if (empNo.length === 0 && employee) {
       clearSession();
@@ -133,6 +157,7 @@ const Medicine = () => {
     clearSession();
     setEmpNo("");
     setSearchId("");
+    setBookNo("");
     setDate(new Date().toISOString().split('T')[0]);
   };
 
@@ -220,9 +245,11 @@ const Medicine = () => {
                   <Input
                     value={searchId}
                     onChange={(e) => setSearchId(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleIdSearch()}
+                    placeholder="Enter ID"
                     className="h-9 border-sky-300 dark:border-sky-700"
                   />
-                  <Button className="h-9 bg-sky-600 hover:bg-sky-700 font-bold px-6">Search</Button>
+                  <Button onClick={handleIdSearch} disabled={loading || !searchId} className="h-9 bg-sky-600 hover:bg-sky-700 font-bold px-6">Search</Button>
                 </div>
               </div>
 
@@ -232,15 +259,27 @@ const Medicine = () => {
                   <Input
                     value={empNo}
                     onChange={(e) => setEmpNo(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleValidate()}
+                    placeholder="Enter Emp No"
                     className="h-9 border-sky-500 ring-1 ring-sky-200 dark:ring-sky-900"
                   />
-                  <Button onClick={handleValidate} disabled={loading} className="h-9 bg-sky-600 hover:bg-sky-700 font-bold px-6">Details</Button>
+                  <Button onClick={handleValidate} disabled={loading || !empNo} className="h-9 bg-sky-600 hover:bg-sky-700 font-bold px-6">Details</Button>
                 </div>
               </div>
 
               <div className="flex items-center gap-4">
                 <Label className="w-32 text-right font-bold text-sky-900 dark:text-sky-300">Emp Name</Label>
                 <Input value={employee?.name || ""} readOnly className="h-9 border-sky-200 dark:border-sky-800 bg-muted" />
+              </div>
+
+              <div className="flex items-center gap-4">
+                <Label className="w-32 text-right font-bold text-sky-900 dark:text-sky-300">Book No</Label>
+                <Input
+                  value={bookNo || ""}
+                  onChange={(e) => setBookNo(e.target.value)}
+                  placeholder="Enter Book No"
+                  className="h-9 border-sky-200 dark:border-sky-800"
+                />
               </div>
 
               <div className="flex items-center gap-4">
