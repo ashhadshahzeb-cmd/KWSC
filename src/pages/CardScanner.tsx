@@ -55,12 +55,13 @@ const CardScanner = () => {
         const id = params.get('id');
         if (id) {
             setManualCardNo(id);
-            handleLookup(id);
+            // Delay slightly to ensure handleLookup is ready (hoisting is safe but pattern is better)
+            setTimeout(() => handleLookup(id), 500);
         }
     }, []);
 
     const handleLookup = async (identifier: string) => {
-        if (!identifier.trim()) {
+        if (!identifier || !identifier.trim()) {
             setError('Please enter a card number or employee number');
             return;
         }
@@ -69,7 +70,16 @@ const CardScanner = () => {
         setError(null);
 
         try {
-            const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/cards/scan/${identifier}`);
+            // Use production URL as fallback if env variable is missing
+            const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://kwscmedicalsystem.vercel.app';
+            const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+
+            console.log(`Scanning card: ${identifier} via ${cleanBaseUrl}`);
+            const response = await fetch(`${cleanBaseUrl}/api/cards/scan/${identifier}`);
+            if (!response.ok) {
+                throw new Error(`Server responded with ${response.status}`);
+            }
+
             const result = await response.json();
 
             if (result.success) {
