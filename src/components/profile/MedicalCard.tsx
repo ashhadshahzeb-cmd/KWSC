@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { ShieldCheck, Phone, Globe, CreditCard } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { ShieldCheck, Phone, Globe, CreditCard, QrCode } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import { cn } from "@/lib/utils";
 
 interface MedicalCardProps {
@@ -160,16 +161,12 @@ const BackSide = ({ data, background }: { data: any, background: string }) => (
             <p className="text-[8px] text-gray-500">Provider Hotline: 1-887-HEALTHY</p>
         </div>
 
-        {/* Barcode & Benefits */}
+        {/* QR Code & Benefits */}
         <div className="flex flex-col items-center justify-center relative z-10">
-            <div className="bg-white p-2 rounded w-4/5 flex flex-col items-center">
-                {/* Fake Barcode using CSS */}
-                <div className="h-7 w-full flex items-end justify-center gap-[2px] overflow-hidden opacity-80">
-                    {Array.from({ length: 40 }).map((_, i) => (
-                        <div key={i} className="bg-black" style={{ width: Math.random() > 0.5 ? 2 : 1, height: '100%' }} />
-                    ))}
-                </div>
-                <span className="text-[7px] text-black font-mono font-bold tracking-[0.2em] mt-1">SCAN FOR BENEFITS</span>
+            <div className="bg-white p-2 rounded w-3/5 flex flex-col items-center">
+                {/* Real QR Code */}
+                <QRCodeComponent data={data} />
+                <span className="text-[7px] text-black font-mono font-bold tracking-[0.2em] mt-1">SCAN FOR DETAILS</span>
             </div>
         </div>
 
@@ -195,5 +192,27 @@ const BackSide = ({ data, background }: { data: any, background: string }) => (
         </div>
     </div>
 );
+
+// QR Code Component
+const QRCodeComponent = ({ data }: { data: any }) => {
+    // Create QR code data with card information
+    const qrData = JSON.stringify({
+        cardNo: data.card_no,
+        name: data.participant_name,
+        empNo: data.emp_no,
+        cnic: data.cnic,
+        branch: data.branch,
+        validUpto: data.valid_upto
+    });
+
+    return (
+        <QRCodeSVG
+            value={qrData}
+            size={64}
+            level="M"
+            includeMargin={false}
+        />
+    );
+};
 
 export default MedicalCard;
