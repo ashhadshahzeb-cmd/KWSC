@@ -96,12 +96,12 @@ const FrontSide = ({ data, background }: { data: any, background: string }) => (
                     <ShieldCheck className="w-6 h-6 text-white" />
                 </div>
                 <div>
-                    <h1 className="text-lg font-bold leading-tight tracking-wide">HEALFLOW</h1>
-                    <p className="text-[8px] text-gray-400 uppercase tracking-wider">Health Insurance</p>
+                    <h1 className="text-lg font-bold leading-tight tracking-wide">KWSC</h1>
+                    <p className="text-[8px] text-gray-400 uppercase tracking-wider">RFID Card System</p>
                 </div>
             </div>
             <span className="text-[10px] font-medium tracking-widest text-gray-400 uppercase border border-gray-600 px-2 py-0.5 rounded">
-                Member Card
+                RFID Card
             </span>
         </div>
 
@@ -155,7 +155,7 @@ const BackSide = ({ data, background }: { data: any, background: string }) => (
             <h3 className="text-[9px] uppercase font-bold tracking-widest text-gray-300">Emergency Contact</h3>
             <div className="flex items-center justify-center gap-1.5 text-base font-bold text-green-400">
                 <Phone className="w-3.5 h-3.5 fill-current" />
-                <span>1-800-HEALFLOW</span>
+                <span>1-800-KWSC</span>
             </div>
             <p className="text-[8px] text-gray-500">Provider Hotline: 1-887-HEALTHY</p>
         </div>
@@ -183,7 +183,7 @@ const BackSide = ({ data, background }: { data: any, background: string }) => (
         <div className="flex justify-between items-end relative z-10">
             <div className="flex items-center gap-1 text-[7px] text-green-400/80">
                 <Globe className="w-2.5 h-2.5" />
-                <span>www.healflow.com</span>
+                <span>www.kwscmedical.com</span>
             </div>
             <div className="text-right">
                 <div className="w-20 border-b border-gray-600 mb-0.5" />
