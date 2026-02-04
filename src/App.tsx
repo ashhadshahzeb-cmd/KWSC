@@ -25,6 +25,7 @@ import EmployeeEntry from "./pages/EmployeeEntry";
 import NoteSheet from "./pages/NoteSheet";
 import NotFound from "./pages/NotFound";
 import VirtualCard from "./pages/VirtualCard";
+import CardScanner from "./pages/CardScanner";
 import Claims from "./pages/Claims";
 import { TreatmentProvider } from "./contexts/TreatmentContext";
 import { NotificationProvider } from "./contexts/NotificationContext";
@@ -115,6 +116,7 @@ const AppRoutes = () => {
         <Route path="admin-chat" element={<AdminChat />} />
         <Route path="profile" element={<Profile />} />
         <Route path="medical-card" element={<VirtualCard />} />
+        <Route path="card-scanner" element={<CardScanner />} />
         <Route path="settings" element={<Settings />} />
         <Route path="all-employees" element={<AllEmployees />} />
         <Route

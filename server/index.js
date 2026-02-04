@@ -577,6 +577,107 @@ app.post('/api/auth/login', async (req, res) => {
     }
 });
 
+// ==================== CARD SCANNER API ====================
+// Card Balance Lookup (for QR Scanner)
+app.get('/api/cards/scan/:identifier', async (req, res) => {
+    const { identifier } = req.params; // Can be card_no or emp_no
+    try {
+        // First, try to find the card
+        const cardQuery = `
+            SELECT 
+                c.card_no,
+                c.participant_name,
+                c.emp_no,
+                c.cnic,
+                c.customer_no,
+                c.dob,
+                c.valid_upto,
+                c.branch,
+                c.benefit_covered,
+                c.hospitalization,
+                c.room_limit,
+                c.normal_delivery,
+                c.c_section_limit,
+                c.total_limit,
+                c.spent_amount,
+                c.remaining_balance
+            FROM cards c
+            WHERE c.card_no = $1 OR c.emp_no = $1
+            LIMIT 1
+        `;
+
+        const cardResult = await pool.query(cardQuery, [identifier]);
+
+        if (cardResult.rows.length === 0) {
+            return res.status(404).json({ error: 'Card not found' });
+        }
+
+        const card = cardResult.rows[0];
+
+        // Get treatment history for this employee
+        const treatmentQuery = `
+            SELECT 
+                Treatment as treatment_type,
+                Visit_Date as visit_date,
+                Medicine_amount as amount,
+                Lab_name as lab_name,
+                Hospital_name as hospital_name
+            FROM Treatment2
+            WHERE Emp_no = $1
+            ORDER BY Visit_Date DESC
+            LIMIT 10
+        `;
+
+        const treatmentResult = await pool.query(treatmentQuery, [card.emp_no]);
+
+        // Calculate realtime spent amount from treatment records
+        const totalSpentQuery = `
+            SELECT COALESCE(SUM(CAST(Medicine_amount AS DECIMAL)), 0) as total_spent
+            FROM Treatment2
+            WHERE Emp_no = $1
+        `;
+
+        const spentResult = await pool.query(totalSpentQuery, [card.emp_no]);
+        const actualSpent = parseFloat(spentResult.rows[0].total_spent) || 0;
+        const totalLimit = parseFloat(card.total_limit) || 0;
+        const remaining = totalLimit - actualSpent;
+
+        res.json({
+            success: true,
+            card: {
+                cardNo: card.card_no,
+                participantName: card.participant_name,
+                empNo: card.emp_no,
+                cnic: card.cnic,
+                customerNo: card.customer_no,
+                dob: card.dob,
+                validUpto: card.valid_upto,
+                branch: card.branch,
+                benefitCovered: card.benefit_covered,
+                hospitalization: card.hospitalization,
+                roomLimit: card.room_limit,
+                normalDelivery: card.normal_delivery,
+                cSectionLimit: card.c_section_limit,
+                totalLimit: totalLimit,
+                spentAmount: actualSpent,
+                remainingBalance: remaining,
+                lastUpdate: new Date().toISOString()
+            },
+            recentTreatments: treatmentResult.rows.map(t => ({
+                type: t.treatment_type,
+                date: t.visit_date,
+                amount: parseFloat(t.amount) || 0,
+                labName: t.lab_name,
+                hospitalName: t.hospital_name
+            }))
+        });
+    } catch (err) {
+        console.error('Card scan error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ==================== USER ROUTES ====================
 // Get all users (Admin only)
 app.get('/api/users', async (req, res) => {
     try {
