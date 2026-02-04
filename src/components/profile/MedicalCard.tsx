@@ -106,39 +106,43 @@ const FrontSide = ({ data, background }: { data: any, background: string }) => (
             </span>
         </div>
 
+        {/* Prominent Card Number (Credit Card Style) */}
+        <div className="relative z-10 mt-2 text-center">
+            <div className="text-[14px] font-mono tracking-[0.3em] font-bold text-white shadow-sm drop-shadow-md">
+                {data.card_no?.match(/.{1,4}/g)?.join(' ') || data.card_no}
+            </div>
+            <p className="text-[6px] text-gray-500 uppercase tracking-widest mt-0.5">Card Number</p>
+        </div>
+
         {/* Content */}
-        <div className="flex justify-between items-end relative z-10 mt-2">
+        <div className="flex justify-between items-end relative z-10">
             {/* Left Details Box */}
-            <div className="border border-gray-600 rounded bg-black/20 p-2 min-w-[180px] backdrop-blur-sm">
-                <div className="grid grid-cols-[auto,1fr] gap-x-3 gap-y-1 text-[9px]">
-                    <span className="text-gray-400 font-medium uppercase">Name:</span>
-                    <span className="font-bold uppercase truncate max-w-[120px]">{data.participant_name}</span>
+            <div className="border border-gray-600 rounded bg-black/20 p-2 min-w-[160px] backdrop-blur-sm">
+                <div className="grid grid-cols-[auto,1fr] gap-x-2 gap-y-0.5 text-[8px]">
+                    <span className="text-gray-400 font-medium uppercase">Name</span>
+                    <span className="font-bold uppercase truncate max-w-[100px]">{data.participant_name}</span>
 
-                    <span className="text-gray-400 font-medium uppercase">Member ID:</span>
-                    <span className="font-mono font-bold">{data.card_no}</span>
-
-                    <span className="text-gray-400 font-medium uppercase">Emp No:</span>
+                    <span className="text-gray-400 font-medium uppercase">Emp No</span>
                     <span className="font-mono">{data.emp_no}</span>
                 </div>
             </div>
 
             {/* Right Watermark Area */}
             <div className="text-right flex flex-col items-end">
-                <ShieldCheck className="w-16 h-16 text-white/5 absolute bottom-12 right-4" />
-                <div className="text-[9px] text-gray-400 mb-1 uppercase tracking-wider">Primary Branch</div>
-                <div className="font-bold text-xs uppercase">{data.branch || 'Main Campus'}</div>
+                <div className="text-[7px] text-gray-400 mb-0.5 uppercase tracking-wider">Branch</div>
+                <div className="font-bold text-[9px] uppercase">{data.branch || 'Main Campus'}</div>
             </div>
         </div>
 
         {/* Footer */}
-        <div className="flex justify-between items-center text-[8px] uppercase tracking-wider text-gray-400 relative z-10 border-t border-gray-700/50 pt-2 mt-1">
-            <div className="flex gap-4">
+        <div className="flex justify-between items-center text-[7px] uppercase tracking-wider text-gray-400 relative z-10 border-t border-gray-700/50 pt-1 mt-1">
+            <div className="flex gap-3">
                 <div>
-                    <span className="mr-1 opacity-70">Valid From:</span>
+                    <span className="mr-1 opacity-70">Valid From</span>
                     <span className="text-white font-mono">{new Date().toLocaleDateString()}</span>
                 </div>
                 <div>
-                    <span className="mr-1 opacity-70">Expires:</span>
+                    <span className="mr-1 opacity-70">Expires</span>
                     <span className="text-white font-mono">{new Date(data.valid_upto).toLocaleDateString()}</span>
                 </div>
             </div>
@@ -163,15 +167,15 @@ const BackSide = ({ data, background }: { data: any, background: string }) => (
 
         {/* QR Code & Benefits */}
         <div className="flex flex-col items-center justify-center relative z-10">
-            <div className="bg-white p-2 rounded w-3/5 flex flex-col items-center">
-                {/* Real QR Code */}
+            <div className="bg-white p-1.5 rounded w-1/2 flex flex-col items-center shadow-lg">
+                {/* Real QR Code - Encodes URL for scanner link */}
                 <QRCodeComponent data={data} />
-                <span className="text-[7px] text-black font-mono font-bold tracking-[0.2em] mt-1">SCAN FOR DETAILS</span>
+                <span className="text-[6px] text-black font-mono font-bold tracking-[0.2em] mt-1 shrink-0 uppercase">Verified Scan</span>
             </div>
         </div>
 
         {/* Disclaimer */}
-        <div className="text-[6.5px] text-center text-gray-500 leading-tight relative z-10 px-3">
+        <div className="text-[6px] text-center text-gray-500 leading-tight relative z-10 px-4">
             IMPORTANT: PRESENT THIS CARD TO YOUR PROVIDER AT EACH VISIT.
             FOR A LIST OF PARTICIPATING PROVIDERS, VISIT OUR WEBSITE.
         </div>
@@ -184,7 +188,7 @@ const BackSide = ({ data, background }: { data: any, background: string }) => (
             </div>
             <div className="text-right">
                 <div className="w-20 border-b border-gray-600 mb-0.5" />
-                <p className="text-[6.5px] text-gray-500 uppercase tracking-widest">Authorized Signature</p>
+                <p className="text-[6px] text-gray-500 uppercase tracking-widest">Authorized Signature</p>
             </div>
         </div>
         <div className="absolute bottom-2 right-2 opacity-20">
@@ -195,20 +199,13 @@ const BackSide = ({ data, background }: { data: any, background: string }) => (
 
 // QR Code Component
 const QRCodeComponent = ({ data }: { data: any }) => {
-    // Create QR code data with card information
-    const qrData = JSON.stringify({
-        cardNo: data.card_no,
-        name: data.participant_name,
-        empNo: data.emp_no,
-        cnic: data.cnic,
-        branch: data.branch,
-        validUpto: data.valid_upto
-    });
+    // Encode the scanner URL with the card number
+    const scannerUrl = `https://kwsc-frontends.vercel.app/card-scanner?id=${data.card_no}`;
 
     return (
         <QRCodeSVG
-            value={qrData}
-            size={64}
+            value={scannerUrl}
+            size={56}
             level="M"
             includeMargin={false}
         />

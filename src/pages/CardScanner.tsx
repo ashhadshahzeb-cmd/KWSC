@@ -49,6 +49,16 @@ const CardScanner = () => {
     const [manualCardNo, setManualCardNo] = useState('');
     const [isDialogOpen, setIsDialogOpen] = useState(false);
 
+    // Auto-lookup if ID is in URL
+    React.useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const id = params.get('id');
+        if (id) {
+            setManualCardNo(id);
+            handleLookup(id);
+        }
+    }, []);
+
     const handleLookup = async (identifier: string) => {
         if (!identifier.trim()) {
             setError('Please enter a card number or employee number');
