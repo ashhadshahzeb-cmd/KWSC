@@ -1,9 +1,23 @@
 import React, { useState } from 'react';
-import { QrCode, Scan, AlertCircle, Loader2, CreditCard, Calendar, User, Building, DollarSign, TrendingUp, TrendingDown, Clock } from 'lucide-react';
+import {
+    QrCode, Scan, AlertCircle, Loader2, CreditCard,
+    Calendar, User, Building, DollarSign, TrendingUp,
+    TrendingDown, Clock, ChevronRight, History,
+    ShieldCheck, Activity, Wallet, Info
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { sqlApi } from '@/lib/api';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { cn } from "@/lib/utils";
 
 interface CardData {
     cardNo: string;
@@ -28,51 +42,15 @@ interface TreatmentRecord {
 }
 
 const CardScanner = () => {
-    const [scanning, setScanning] = useState(false);
     const [cardData, setCardData] = useState<CardData | null>(null);
     const [treatments, setTreatments] = useState<TreatmentRecord[]>([]);
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
     const [manualCardNo, setManualCardNo] = useState('');
+    const [isDialogOpen, setIsDialogOpen] = useState(false);
 
-    const handleScan = async (data: string | null) => {
-        if (!data) return;
-
-        setLoading(true);
-        setError(null);
-
-        try {
-            // Decode QR code data
-            const qrData = JSON.parse(data);
-            const identifier = qrData.cardNo || qrData.empNo;
-
-            if (!identifier) {
-                setError('Invalid QR code format');
-                setLoading(false);
-                return;
-            }
-
-            // Fetch card balance from backend
-            const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/cards/scan/${identifier}`);
-            const result = await response.json();
-
-            if (result.success) {
-                setCardData(result.card);
-                setTreatments(result.recentTreatments || []);
-                setScanning(false);
-            } else {
-                setError(result.error || 'Card not found');
-            }
-        } catch (err: any) {
-            setError('Failed to read QR code. Please try again.');
-            console.error('Scan error:', err);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleManualLookup = async () => {
-        if (!manualCardNo.trim()) {
+    const handleLookup = async (identifier: string) => {
+        if (!identifier.trim()) {
             setError('Please enter a card number or employee number');
             return;
         }
@@ -81,12 +59,13 @@ const CardScanner = () => {
         setError(null);
 
         try {
-            const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/cards/scan/${manualCardNo}`);
+            const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/cards/scan/${identifier}`);
             const result = await response.json();
 
             if (result.success) {
                 setCardData(result.card);
                 setTreatments(result.recentTreatments || []);
+                setIsDialogOpen(true);
             } else {
                 setError(result.error || 'Card not found');
             }
@@ -113,223 +92,285 @@ const CardScanner = () => {
         });
     };
 
-    const getBalanceColor = (remaining: number, total: number) => {
-        const percentage = (remaining / total) * 100;
-        if (percentage > 50) return 'text-green-600';
-        if (percentage > 25) return 'text-yellow-600';
-        return 'text-red-600';
+    const getBalancePercentage = (remaining: number, total: number) => {
+        if (total === 0) return 0;
+        return Math.min(Math.max((remaining / total) * 100, 0), 100);
+    };
+
+    const getBalanceInfo = (remaining: number, total: number) => {
+        const percentage = getBalancePercentage(remaining, total);
+        if (percentage > 50) return { color: 'text-green-600', bg: 'bg-green-100', bar: 'bg-green-600', label: 'Healthy' };
+        if (percentage > 20) return { color: 'text-yellow-600', bg: 'bg-yellow-100', bar: 'bg-yellow-600', label: 'Low Balance' };
+        return { color: 'text-red-600', bg: 'bg-red-100', bar: 'bg-red-600', label: 'Critical' };
     };
 
     return (
-        <div className="min-h-screen bg-gray-50 p-6">
-            <div className="max-w-4xl mx-auto space-y-6">
-                {/* Header */}
-                <div className="flex items-center justify-between">
-                    <div>
-                        <h1 className="text-3xl font-bold text-gray-900">Card Scanner</h1>
-                        <p className="text-gray-600">Scan KWSC Medical Cards to View Balance</p>
+        <div className="min-h-screen bg-[#f8fafc] dark:bg-slate-950 p-4 md:p-8">
+            <div className="max-w-4xl mx-auto space-y-8">
+                {/* Header Section */}
+                <div className="relative overflow-hidden bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl p-8 text-white shadow-xl">
+                    <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none">
+                        <Scan className="w-32 h-32" />
                     </div>
-                    <QrCode className="w-12 h-12 text-blue-600" />
+                    <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+                        <div>
+                            <div className="flex items-center gap-3 mb-2">
+                                <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
+                                    <ShieldCheck className="w-6 h-6" />
+                                </div>
+                                <h1 className="text-2xl font-bold tracking-tight">KWSC Medical Portal</h1>
+                            </div>
+                            <p className="text-blue-100 text-sm md:text-base font-medium opacity-90">
+                                Real-time Card Verification & Balance Management
+                            </p>
+                        </div>
+                    </div>
                 </div>
 
-                {/* Scanner Controls */}
-                {!cardData && (
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Scan Medical Card</CardTitle>
-                            <CardDescription>Scan the QR code on the back of the medical card or enter card number manually</CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            {/* Manual Input */}
-                            <div className="flex gap-2">
+                {/* Search Card */}
+                <Card className="border-none shadow-lg overflow-hidden">
+                    <CardHeader className="bg-white dark:bg-slate-900 pb-4">
+                        <CardTitle className="text-xl font-bold flex items-center gap-2">
+                            <QrCode className="w-5 h-5 text-blue-600" />
+                            Verify Card
+                        </CardTitle>
+                        <CardDescription>Enter card/employee details to view current entitlement and history</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-6 pt-2">
+                        <div className="flex flex-col md:flex-row gap-3">
+                            <div className="relative flex-1">
+                                <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                                 <input
                                     type="text"
                                     value={manualCardNo}
                                     onChange={(e) => setManualCardNo(e.target.value)}
-                                    placeholder="Enter Card Number or Employee Number"
-                                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                    onKeyPress={(e) => e.key === 'Enter' && handleManualLookup()}
+                                    placeholder="Enter Card Number (e.g. 10245)"
+                                    className="w-full pl-10 pr-4 py-3 bg-slate-50 dark:bg-slate-800 border-none rounded-xl focus:ring-2 focus:ring-blue-500 font-medium transition-all"
+                                    onKeyPress={(e) => e.key === 'Enter' && handleLookup(manualCardNo)}
                                 />
-                                <Button onClick={handleManualLookup} disabled={loading}>
-                                    {loading ? (
-                                        <Loader2 className="w-4 h-4 animate-spin" />
-                                    ) : (
-                                        'Lookup'
-                                    )}
-                                </Button>
                             </div>
+                            <Button
+                                onClick={() => handleLookup(manualCardNo)}
+                                disabled={loading}
+                                className="h-12 px-8 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-md hover:shadow-lg transition-all disabled:opacity-70"
+                            >
+                                {loading ? (
+                                    <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                                ) : (
+                                    <Scan className="w-5 h-5 mr-2" />
+                                )}
+                                Verify Card
+                            </Button>
+                        </div>
 
-                            {/* Camera Scanner Note */}
-                            <Alert>
-                                <Scan className="w-4 h-4" />
-                                <AlertDescription>
-                                    QR code camera scanner requires HTTPS (works on deployed site). Use manual lookup for testing.
-                                </AlertDescription>
+                        {error && (
+                            <Alert variant="destructive" className="bg-red-50 border-red-100 text-red-700 animate-in fade-in slide-in-from-top-4">
+                                <AlertCircle className="w-4 h-4" />
+                                <AlertDescription className="font-medium">{error}</AlertDescription>
                             </Alert>
-                        </CardContent>
-                    </Card>
-                )}
+                        )}
+                    </CardContent>
+                </Card>
 
-                {/* Error Display */}
-                {error && (
-                    <Alert variant="destructive">
-                        <AlertCircle className="w-4 h-4" />
-                        <AlertDescription>{error}</AlertDescription>
-                    </Alert>
-                )}
-
-                {/* Card Data Display */}
-                {cardData && (
-                    <>
-                        {/* Balance Overview */}
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <Card>
-                                <CardContent className="pt-6">
-                                    <div className="flex items-center justify-between">
-                                        <div>
-                                            <p className="text-sm text-gray-600">Total Limit</p>
-                                            <p className="text-2xl font-bold text-gray-900">{formatCurrency(cardData.totalLimit)}</p>
+                {/* Results Dialog */}
+                <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                    <DialogContent className="max-w-2xl bg-slate-50 dark:bg-slate-950 border-none p-0 overflow-hidden rounded-2xl shadow-2xl">
+                        {cardData && (
+                            <div className="flex flex-col h-full max-h-[90vh]">
+                                {/* Dialog Header / Top Branding */}
+                                <div className="bg-gradient-to-r from-blue-700 to-indigo-800 p-6 text-white shrink-0">
+                                    <div className="flex justify-between items-start mb-4">
+                                        <Badge className="bg-white/20 hover:bg-white/30 text-white border-none backdrop-blur-sm px-3 py-1 font-bold">
+                                            RFID VERIFIED
+                                        </Badge>
+                                        <div className="text-right">
+                                            <p className="text-xs text-blue-100 uppercase tracking-widest font-bold opacity-80 mb-1">Update ID</p>
+                                            <p className="text-sm font-mono font-medium">{new Date().getTime().toString().slice(-8)}</p>
                                         </div>
-                                        <DollarSign className="w-10 h-10 text-blue-600 opacity-20" />
                                     </div>
-                                </CardContent>
-                            </Card>
+                                    <div>
+                                        <h2 className="text-2xl font-black uppercase tracking-tight leading-none mb-1">
+                                            {cardData.participantName}
+                                        </h2>
+                                        <p className="text-blue-100 text-sm font-medium opacity-80">
+                                            Emp ID: <span className="text-white">{cardData.empNo}</span> | Card: <span className="text-white">{cardData.cardNo}</span>
+                                        </p>
+                                    </div>
+                                </div>
 
-                            <Card>
-                                <CardContent className="pt-6">
-                                    <div className="flex items-center justify-between">
-                                        <div>
-                                            <p className="text-sm text-gray-600">Amount Spent</p>
-                                            <p className="text-2xl font-bold text-red-600">{formatCurrency(cardData.spentAmount)}</p>
+                                {/* Body Content */}
+                                <div className="p-6 space-y-6 overflow-y-auto custom-scrollbar">
+                                    {/* Balance Logic Visualization */}
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                        <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm">
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <Wallet className="w-4 h-4 text-blue-600" />
+                                                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Authorized Limit</span>
+                                            </div>
+                                            <p className="text-lg font-bold text-slate-900 dark:text-white">{formatCurrency(cardData.totalLimit)}</p>
                                         </div>
-                                        <TrendingDown className="w-10 h-10 text-red-600 opacity-20" />
-                                    </div>
-                                </CardContent>
-                            </Card>
-
-                            <Card>
-                                <CardContent className="pt-6">
-                                    <div className="flex items-center justify-between">
-                                        <div>
-                                            <p className="text-sm text-gray-600">Remaining Balance</p>
-                                            <p className={`text-2xl font-bold ${getBalanceColor(cardData.remainingBalance, cardData.totalLimit)}`}>
+                                        <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm">
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <TrendingDown className="w-4 h-4 text-red-500" />
+                                                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Total Utilized</span>
+                                            </div>
+                                            <p className="text-lg font-bold text-red-600">{formatCurrency(cardData.spentAmount)}</p>
+                                        </div>
+                                        <div className={cn(
+                                            "p-4 rounded-xl border-none shadow-sm",
+                                            getBalanceInfo(cardData.remainingBalance, cardData.totalLimit).bg
+                                        )}>
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <Activity className={cn("w-4 h-4", getBalanceInfo(cardData.remainingBalance, cardData.totalLimit).color)} />
+                                                <span className={cn("text-[10px] font-bold uppercase tracking-wider opacity-70", getBalanceInfo(cardData.remainingBalance, cardData.totalLimit).color)}>Balance Available</span>
+                                            </div>
+                                            <p className={cn("text-lg font-bold", getBalanceInfo(cardData.remainingBalance, cardData.totalLimit).color)}>
                                                 {formatCurrency(cardData.remainingBalance)}
                                             </p>
                                         </div>
-                                        <TrendingUp className={`w-10 h-10 opacity-20 ${getBalanceColor(cardData.remainingBalance, cardData.totalLimit)}`} />
                                     </div>
-                                </CardContent>
-                            </Card>
-                        </div>
 
-                        {/* Card Details */}
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="flex items-center gap-2">
-                                    <CreditCard className="w-5 h-5" />
-                                    Card Details
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div className="flex items-start gap-3">
-                                        <User className="w-5 h-5 text-gray-400 mt-0.5" />
-                                        <div>
-                                            <p className="text-sm text-gray-600">Cardholder Name</p>
-                                            <p className="font-semibold text-gray-900">{cardData.participantName}</p>
+                                    {/* Progress Bar Visualization */}
+                                    <div className="space-y-2">
+                                        <div className="flex justify-between items-center text-xs font-bold uppercase tracking-wider text-slate-500">
+                                            <span>Limit Utilization</span>
+                                            <span className={getBalanceInfo(cardData.remainingBalance, cardData.totalLimit).color}>
+                                                {Math.round(100 - getBalancePercentage(cardData.remainingBalance, cardData.totalLimit))}% SPENT
+                                            </span>
+                                        </div>
+                                        <div className="h-3 w-full bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+                                            <div
+                                                className={cn("h-full transition-all duration-1000 ease-out", getBalanceInfo(cardData.remainingBalance, cardData.totalLimit).bar)}
+                                                style={{ width: `${getBalancePercentage(cardData.remainingBalance, cardData.totalLimit)}%` }}
+                                            />
                                         </div>
                                     </div>
 
-                                    <div className="flex items-start gap-3">
-                                        <CreditCard className="w-5 h-5 text-gray-400 mt-0.5" />
+                                    {/* Details Grid */}
+                                    <div className="grid grid-cols-2 gap-y-4 gap-x-8 pt-2">
                                         <div>
-                                            <p className="text-sm text-gray-600">Card Number</p>
-                                            <p className="font-semibold text-gray-900 font-mono">{cardData.cardNo}</p>
+                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Medical Branch</p>
+                                            <div className="flex items-center gap-2 font-bold text-slate-700 dark:text-slate-300">
+                                                <Building className="w-4 h-4 text-slate-400" />
+                                                {cardData.branch}
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Validity Period</p>
+                                            <div className="flex items-center gap-2 font-bold text-slate-700 dark:text-slate-300">
+                                                <Clock className="w-4 h-4 text-slate-400" />
+                                                Until {formatDate(cardData.validUpto)}
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">ID Card (CNIC)</p>
+                                            <div className="flex items-center gap-2 font-bold text-slate-700 dark:text-slate-300">
+                                                <Info className="w-4 h-4 text-slate-400" />
+                                                {cardData.cnic}
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Benefit Status</p>
+                                            <Badge variant="outline" className="text-green-600 border-green-200 bg-green-50/50 font-bold">
+                                                ACTIVE COVERAGE
+                                            </Badge>
                                         </div>
                                     </div>
 
-                                    <div className="flex items-start gap-3">
-                                        <User className="w-5 h-5 text-gray-400 mt-0.5" />
-                                        <div>
-                                            <p className="text-sm text-gray-600">Employee Number</p>
-                                            <p className="font-semibold text-gray-900">{cardData.empNo}</p>
-                                        </div>
-                                    </div>
+                                    <Separator />
 
-                                    <div className="flex items-start gap-3">
-                                        <Building className="w-5 h-5 text-gray-400 mt-0.5" />
-                                        <div>
-                                            <p className="text-sm text-gray-600">Branch</p>
-                                            <p className="font-semibold text-gray-900">{cardData.branch}</p>
+                                    {/* Recent Activity */}
+                                    <div className="space-y-4 pb-2">
+                                        <div className="flex items-center justify-between">
+                                            <h3 className="text-sm font-bold flex items-center gap-2 text-slate-800 dark:text-slate-200">
+                                                <History className="w-4 h-4 text-blue-600" />
+                                                Medical Usage History
+                                            </h3>
+                                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Last 10 Visits</span>
                                         </div>
-                                    </div>
 
-                                    <div className="flex items-start gap-3">
-                                        <Calendar className="w-5 h-5 text-gray-400 mt-0.5" />
-                                        <div>
-                                            <p className="text-sm text-gray-600">Valid Until</p>
-                                            <p className="font-semibold text-gray-900">{formatDate(cardData.validUpto)}</p>
-                                        </div>
-                                    </div>
-
-                                    <div className="flex items-start gap-3">
-                                        <Clock className="w-5 h-5 text-gray-400 mt-0.5" />
-                                        <div>
-                                            <p className="text-sm text-gray-600">Last Updated</p>
-                                            <p className="font-semibold text-gray-900">{formatDate(cardData.lastUpdate)}</p>
-                                        </div>
+                                        {treatments.length > 0 ? (
+                                            <div className="space-y-3">
+                                                {treatments.map((treatment, index) => (
+                                                    <div
+                                                        key={index}
+                                                        className="group flex items-center justify-between p-3 rounded-xl hover:bg-white dark:hover:bg-slate-900 border border-transparent hover:border-slate-200 dark:hover:border-slate-800 transition-all hover:shadow-sm"
+                                                    >
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center shrink-0">
+                                                                <Activity className="w-5 h-5 text-blue-600" />
+                                                            </div>
+                                                            <div>
+                                                                <p className="text-sm font-bold text-slate-900 dark:text-white leading-tight">{treatment.type}</p>
+                                                                <p className="text-[10px] font-medium text-slate-500 mt-0.5">
+                                                                    {formatDate(treatment.date)} • {treatment.hospitalName || treatment.labName || 'Medical Facility'}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                        <p className="text-sm font-bold text-red-600">-{formatCurrency(treatment.amount)}</p>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <div className="text-center py-6 bg-slate-100 dark:bg-slate-900/40 rounded-2xl border border-dashed border-slate-300 dark:border-slate-800">
+                                                <p className="text-sm font-medium text-slate-400 italic">No recent claims or visits found</p>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
-                            </CardContent>
-                        </Card>
 
-                        {/* Recent Treatments */}
-                        {treatments.length > 0 && (
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle>Recent Treatments</CardTitle>
-                                    <CardDescription>Last 10 treatment records</CardDescription>
-                                </CardHeader>
-                                <CardContent>
-                                    <div className="space-y-3">
-                                        {treatments.map((treatment, index) => (
-                                            <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                                                <div>
-                                                    <p className="font-medium text-gray-900">{treatment.type}</p>
-                                                    <p className="text-sm text-gray-600">
-                                                        {formatDate(treatment.date)}
-                                                        {treatment.labName && <> • {treatment.labName}</>}
-                                                        {treatment.hospitalName && <> • {treatment.hospitalName}</>}
-                                                    </p>
-                                                </div>
-                                                <p className="font-semibold text-red-600">{formatCurrency(treatment.amount)}</p>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </CardContent>
-                            </Card>
+                                {/* Footer Action */}
+                                <div className="p-6 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 shrink-0">
+                                    <Button
+                                        onClick={() => setIsDialogOpen(false)}
+                                        className="w-full h-12 bg-slate-900 dark:bg-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-100 text-white rounded-xl font-bold transition-all shadow-md active:scale-[0.98]"
+                                    >
+                                        Done / Print Receipt
+                                    </Button>
+                                </div>
+                            </div>
                         )}
-
-                        {/* Reset Button */}
-                        <div className="flex justify-center">
-                            <Button
-                                onClick={() => {
-                                    setCardData(null);
-                                    setTreatments([]);
-                                    setManualCardNo('');
-                                    setError(null);
-                                }}
-                                variant="outline"
-                            >
-                                <Scan className="w-4 h-4 mr-2" />
-                                Scan Another Card
-                            </Button>
-                        </div>
-                    </>
-                )}
+                    </DialogContent>
+                </Dialog>
             </div>
+
+            <style dangerouslySetInnerHTML={{
+                __html: `
+                .custom-scrollbar::-webkit-scrollbar {
+                    width: 4px;
+                }
+                .custom-scrollbar::-webkit-scrollbar-track {
+                    background: transparent;
+                }
+                .custom-scrollbar::-webkit-scrollbar-thumb {
+                    background: #e2e8f0;
+                    border-radius: 10px;
+                }
+                .dark .custom-scrollbar::-webkit-scrollbar-thumb {
+                    background: #1e293b;
+                }
+            `}} />
         </div>
     );
 };
 
+const SearchIcon = ({ className }: { className?: string }) => (
+    <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width="24"
+        height="24"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className={className}
+    >
+        <circle cx="11" cy="11" r="8"></circle>
+        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+    </svg>
+);
+
 export default CardScanner;
+

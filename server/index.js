@@ -632,7 +632,7 @@ app.get('/api/cards/scan/:identifier', async (req, res) => {
 
         // Calculate realtime spent amount from treatment records
         const totalSpentQuery = `
-            SELECT COALESCE(SUM(CAST(Medicine_amount AS DECIMAL)), 0) as total_spent
+            SELECT COALESCE(SUM(CAST(NULLIF(regexp_replace(Medicine_amount, '[^0-9.]', '', 'g'), '') AS DECIMAL)), 0) as total_spent
             FROM Treatment2
             WHERE Emp_no = $1
         `;
