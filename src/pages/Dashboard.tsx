@@ -148,8 +148,8 @@ const Dashboard = () => {
         <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-primary/20 rounded-full blur-[100px] -translate-y-1/2 translate-x-1/4 animate-pulse" />
         <div className="absolute bottom-0 left-0 w-[300px] h-[300px] bg-info/20 rounded-full blur-[80px] translate-y-1/2 -translate-x-1/4" />
 
-        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-10">
-          <div className="space-y-6 flex-1">
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6 sm:gap-10">
+          <div className="space-y-4 sm:space-y-6 flex-1 text-center lg:text-left">
             <motion.div
               className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-white"
               initial={{ opacity: 0, x: -20 }}
@@ -161,28 +161,28 @@ const Dashboard = () => {
             </motion.div>
 
             <div className="space-y-2">
-              <h1 className="text-5xl md:text-6xl font-display font-extrabold text-white tracking-tight leading-tight">
+              <h1 className="text-3xl sm:text-4xl md:text-6xl font-display font-extrabold text-white tracking-tight leading-tight">
                 {getGreeting()},{" "}
                 <span className="text-warning">
                   {user?.email?.split("@")[0] || "User"} {getGreetingEmoji()}
                 </span>
               </h1>
-              <p className="text-white/70 text-xl font-medium max-w-2xl leading-relaxed">
+              <p className="text-white/70 text-base sm:text-xl font-medium max-w-2xl leading-relaxed mx-auto lg:mx-0">
                 Experience the next generation of medical management. Here's what's happening at your center today.
               </p>
             </div>
 
-            <div className="flex flex-wrap items-center gap-4">
+            <div className="flex flex-wrap items-center justify-center lg:justify-start gap-3 sm:gap-4">
               <Badge
                 variant="outline"
-                className="bg-white/10 border-white/20 text-white capitalize px-6 py-2 text-sm font-semibold backdrop-blur-sm"
+                className="bg-white/10 border-white/20 text-white capitalize px-4 sm:px-6 py-1 sm:py-2 text-xs sm:text-sm font-semibold backdrop-blur-sm"
               >
                 {role}
               </Badge>
-              <div className="h-1 w-1 bg-white/30 rounded-full" />
+              <div className="h-1 w-1 bg-white/30 rounded-full hidden sm:block" />
               <div className="flex items-center gap-2 text-white/80">
                 <Calendar className="w-4 h-4" />
-                <span className="text-sm font-medium">
+                <span className="text-xs sm:text-sm font-medium">
                   {new Date().toLocaleDateString('en-US', {
                     weekday: 'long',
                     month: 'long',
@@ -194,13 +194,13 @@ const Dashboard = () => {
           </div>
 
           <motion.div
-            className="flex flex-col gap-4 min-w-[320px]"
+            className="flex flex-col gap-4 w-full lg:min-w-[320px] lg:w-auto"
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 0.3 }}
           >
             {/* Quick Stats Grid */}
-            <div className="grid grid-cols-1 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-4">
               {quickStats.map((stat, index) => (
                 <motion.div
                   key={stat.label}

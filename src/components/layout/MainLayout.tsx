@@ -9,11 +9,28 @@ import Peer from "peerjs";
 import CallInterface from "../chat/CallInterface";
 import { apiCall } from "@/lib/api";
 import VoiceAssistant from "../chat/VoiceAssistant";
+import { cn } from "@/lib/utils";
 
 const MainLayout = () => {
   const { user, isAdmin } = useAuth();
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  // Default to collapsed on mobile, open on desktop
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(window.innerWidth < 1024);
   const location = useLocation();
+
+  // Handle window resize
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth < 1024) {
+        setSidebarCollapsed(true);
+      } else {
+        setSidebarCollapsed(false);
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // Call States
   const [callStatus, setCallStatus] = useState<'idle' | 'incoming' | 'connected' | 'ended'>('idle');
@@ -25,7 +42,6 @@ const MainLayout = () => {
 
   useEffect(() => {
     if (isAdmin && user && !peer) {
-      // Use a fixed ID for the admin support
       const newPeer = new Peer('admin-support');
       setPeer(newPeer);
 
@@ -39,7 +55,6 @@ const MainLayout = () => {
     }
   }, [isAdmin, user]);
 
-  // Handle Transcription
   useEffect(() => {
     if (callStatus === 'connected') {
       const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -74,7 +89,7 @@ const MainLayout = () => {
       await apiCall('/chat/send', {
         method: 'POST',
         body: JSON.stringify({
-          senderId: user.id, // Admin ID
+          senderId: user.id,
           receiverId: userId,
           message: `🎤 [Call Transcript]: ${text}`,
           isAdminMessage: true
@@ -87,7 +102,7 @@ const MainLayout = () => {
 
   const acceptCall = async () => {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      alert('Your browser does not support audio calling or it is blocked due to an insecure connection (Non-HTTPS). Please use localhost or HTTPS for testing.');
+      alert('Your browser does not support audio calling or it is blocked due to an insecure connection.');
       return;
     }
 
@@ -121,18 +136,23 @@ const MainLayout = () => {
   };
 
   return (
-    <div className="min-h-screen flex w-full bg-background">
+    <div className="min-h-screen flex w-full bg-background overflow-x-hidden relative">
       <Sidebar collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed(!sidebarCollapsed)} />
-      <div className={`flex-1 flex flex-col transition-all duration-300 ${sidebarCollapsed ? 'ml-20' : 'ml-64'}`}>
+
+      <div className={cn(
+        "flex-1 flex flex-col transition-all duration-300 min-w-0 min-h-screen",
+        "ml-0 lg:ml-64",
+        sidebarCollapsed && "lg:ml-20"
+      )}>
         <Header onMenuClick={() => setSidebarCollapsed(!sidebarCollapsed)} />
-        <main className="flex-1 p-6 overflow-hidden">
+        <main className="flex-1 p-3 sm:p-6 overflow-x-hidden">
           <AnimatePresence mode="wait">
             <motion.div
               key={location.pathname}
-              initial={{ opacity: 0, y: 20, scale: 0.98 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -20, scale: 0.98, transition: { duration: 0.2 } }}
-              transition={{ duration: 0.3, ease: "easeOut" }}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.2 }}
               className="h-full"
             >
               <Outlet />
@@ -140,6 +160,7 @@ const MainLayout = () => {
           </AnimatePresence>
         </main>
       </div>
+
       <ChatWidget />
       <VoiceAssistant />
 

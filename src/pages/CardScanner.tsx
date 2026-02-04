@@ -194,9 +194,9 @@ const CardScanner = () => {
 
                 {/* Results Dialog */}
                 <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                    <DialogContent className="max-w-2xl bg-slate-50 dark:bg-slate-950 border-none p-0 overflow-hidden rounded-2xl shadow-2xl">
+                    <DialogContent className="max-w-2xl w-[95vw] sm:w-full bg-slate-50 dark:bg-slate-950 border-none p-0 overflow-hidden rounded-2xl shadow-2xl">
                         {cardData && (
-                            <div className="flex flex-col h-full max-h-[90vh]">
+                            <div className="flex flex-col h-full max-h-[85vh] sm:max-h-[90vh]">
                                 {/* Dialog Header / Top Branding */}
                                 <div className="bg-gradient-to-r from-blue-700 to-indigo-800 p-6 text-white shrink-0">
                                     <div className="flex justify-between items-start mb-4">
