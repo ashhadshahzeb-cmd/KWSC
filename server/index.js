@@ -585,24 +585,22 @@ app.get('/api/cards/scan/:identifier', async (req, res) => {
         // First, try to find the card
         const cardQuery = `
             SELECT 
-                c.card_no,
-                c.participant_name,
-                c.emp_no,
-                c.cnic,
-                c.customer_no,
-                c.dob,
-                c.valid_upto,
-                c.branch,
-                c.benefit_covered,
-                c.hospitalization,
-                c.room_limit,
-                c.normal_delivery,
-                c.c_section_limit,
-                c.total_limit,
-                c.spent_amount,
-                c.remaining_balance
-            FROM cards c
-            WHERE c.card_no = $1 OR c.emp_no = $1
+                card_no,
+                participant_name,
+                emp_no,
+                cnic,
+                customer_no,
+                dob,
+                valid_upto,
+                branch,
+                benefit_covered,
+                hospitalization,
+                room_limit,
+                normal_delivery,
+                c_section_limit,
+                total_limit
+            FROM medical_cards
+            WHERE card_no = $1 OR emp_no = $1
             LIMIT 1
         `;
 
@@ -617,14 +615,14 @@ app.get('/api/cards/scan/:identifier', async (req, res) => {
         // Get treatment history for this employee
         const treatmentQuery = `
             SELECT 
-                Treatment as treatment_type,
-                Visit_Date as visit_date,
-                Medicine_amount as amount,
-                Lab_name as lab_name,
-                Hospital_name as hospital_name
-            FROM Treatment2
-            WHERE Emp_no = $1
-            ORDER BY Visit_Date DESC
+                treatment as treatment_type,
+                visit_date,
+                medicine_amount as amount,
+                lab_name,
+                hospital_name
+            FROM treatment2
+            WHERE emp_no = $1
+            ORDER BY visit_date DESC
             LIMIT 10
         `;
 
@@ -632,9 +630,9 @@ app.get('/api/cards/scan/:identifier', async (req, res) => {
 
         // Calculate realtime spent amount from treatment records
         const totalSpentQuery = `
-            SELECT COALESCE(SUM(CAST(NULLIF(regexp_replace(Medicine_amount, '[^0-9.]', '', 'g'), '') AS DECIMAL)), 0) as total_spent
-            FROM Treatment2
-            WHERE Emp_no = $1
+            SELECT COALESCE(SUM(CAST(NULLIF(regexp_replace(CAST(medicine_amount AS TEXT), '[^0-9.]', '', 'g'), '') AS DECIMAL)), 0) as total_spent
+            FROM treatment2
+            WHERE emp_no = $1
         `;
 
         const spentResult = await pool.query(totalSpentQuery, [card.emp_no]);
